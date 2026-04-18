@@ -172,6 +172,14 @@ def run_safe_command(command: str) -> str:
     return run_command(command)
 
 
+# ── exported tool list ────────────────────────────────────────────────
+
+SHELL_TOOLS = [
+    run_command,
+    run_safe_command,
+]
+
+
 # ---------------------------------------------------------------------------
 # TEST BLOCK
 # ---------------------------------------------------------------------------
