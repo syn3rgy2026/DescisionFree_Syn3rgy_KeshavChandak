@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synergy Agent Manager</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Top toolbar to look like VS Code -->
+    <div class="title-bar">
+        <span>SynergyWorkspace - index.html</span>
+    </div>
+
+    <div class="app-container">
+        <!-- Editor Area (Left Side) -->
+        <div class="editor-area">
+            <div class="editor-tabs">
+                <div class="tab icon-python">main.py</div>
+                <div class="tab active icon-html">index.html</div>
+                <div class="tab icon-css">style.css</div>
+            </div>
+            <div class="editor-content">
+                <div class="line-numbers">
+                    <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+                </div>
+                <div class="code">
+                    <span class="syntax-keyword">print</span>(<span class="syntax-string">"Welcome to the Synergy Agent IDE Experience"</span>)<br>
+                    <span class="syntax-comment"># The agent is located in the panel on the right --></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Agent UI Panel (Right Side) -->
+        <div class="chat-panel">
+            <div class="chat-header">
+                <span><i class="fa-solid fa-robot"></i> Synergy Agent</span>
+                <div class="header-actions">
+                    <i class="fa-solid fa-ellipsis"></i>
+                </div>
+            </div>
+
+            <!-- Agent Progress Bar (Hidden by default) -->
+            <div class="agent-progress-container" id="progress-container">
+                <div class="agent-progress-header">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                    <span id="progress-title">Agent is thinking...</span>
+                </div>
+                <div class="agent-progress-log" id="progress-log"></div>
+            </div>
+
+            <div class="chat-messages" id="chat-messages">
+                <div class="message assistant">
+                    <div class="message-sender">Synergy</div>
+                    <div class="bubble">
+                        Hello! I am your autonomous coding agent. Use the input below to provide a task or attach a file. What can I build for you today?
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chat-input-area">
+                <div class="attached-files-list" id="attached-files-list"></div>
+                <div class="input-container">
+                    <textarea id="task-input" placeholder="Ask a question or request a task..."></textarea>
+                    
+                    <div class="input-actions">
+                        <input type="file" id="file-upload" hidden multiple>
+                        <button class="icon-btn" id="attach-btn" title="Attach file"><i class="fa-solid fa-paperclip"></i></button>
+                        <button class="icon-btn submit-btn" id="send-btn" title="Send Task">
+                            <i class="fa-solid fa-arrow-up"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="input-footer text-muted">
+                    Shift + Enter for new line
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

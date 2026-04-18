@@ -1,126 +1,113 @@
 """
 main.py
 -------
-CLI entry point for Synergy Agent.
-Provides the interactive >>> loop, dispatches tasks to the agent,
-and handles errors so the CLI never crashes.
+FastAPI entry point for the Synergy Agent system.
+Provides a web interface and API endpoints for running tasks.
 """
 
+import os
 import sys
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
-from rich.rule import Rule
+import asyncio
+from typing import List, Optional
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
 
 from agent.core_agent import run_agent
-from agent.error_recovery import run_with_recovery
 
-console = Console()
+# Create FastAPI app
+app = FastAPI(title="Synergy Agent API")
 
+# Setup CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# ── Welcome Banner ────────────────────────────────────────────────────
+# Ensure required directories exist
+os.makedirs("ui", exist_ok=True)
+os.makedirs("output", exist_ok=True)
 
-def print_banner():
-    """Display the startup banner."""
-    banner = Panel(
-        "[bold cyan]⚡ SYNERGY AGENT ⚡[/bold cyan]\n"
-        "[dim]Autonomous AI Agent — SYN3RGY 3.0 Hackathon[/dim]",
-        border_style="bright_blue",
-        padding=(1, 4),
-    )
-    console.print(banner)
+# Mount static folder for UI assets (.css, .js)
+app.mount("/static", StaticFiles(directory="ui"), name="static")
 
+# Global variables for tracking task status 
+# (Simple array since it's a single user IDE experience)
+current_status = []
 
-# ── Help / Commands Menu ─────────────────────────────────────────────
-
-def print_help():
-    """Show available commands and example tasks."""
-    table = Table(
-        title="Commands",
-        border_style="blue",
-        header_style="bold magenta",
-    )
-    table.add_column("Command", style="cyan", no_wrap=True)
-    table.add_column("Description", style="white")
-
-    table.add_row("[bold]help[/bold]",   "Show this menu again")
-    table.add_row("[bold]exit[/bold]",   "Quit the agent cleanly")
-    table.add_row("[bold]<task>[/bold]", "Describe any task for the agent to execute")
-
-    console.print(table)
-
-    console.print("\n[bold yellow]Example tasks:[/bold yellow]")
-    console.print("  • Search the web for latest AI news and save a summary")
-    console.print("  • Write a Python script that sorts a CSV by date")
-    console.print("  • Create a PowerPoint presentation about climate change")
-    console.print("  • Read data.json and generate a bar chart")
-    console.print()
-
-
-# ── Task Handler ─────────────────────────────────────────────────────
-
-def handle_task(task: str):
+def ui_step_callback(step_log):
     """
-    Run the agent with recovery and display the result.
-    Agent step output (Thought / Tool / Observation) prints freely.
+    Intercepts the Agent's thought process step logs, and appends them
+    to the global status buffer for the UI to poll.
     """
-    console.print(Rule("[bold blue]Agent Starting[/bold blue]", style="blue"))
-    result, success = run_with_recovery(run_agent, task)
-    console.print(Rule(style="blue"))
-
-    if success:
-        console.print(
-            Panel(
-                str(result),
-                title="✅ Result",
-                border_style="green",
-                padding=(1, 2),
-            )
-        )
+    step_num = getattr(step_log, 'step_number', '?')
+    model_output = getattr(step_log, 'model_output', None)
+    tool_calls = getattr(step_log, 'tool_calls', [])
+    err = getattr(step_log, 'error', None)
+    
+    if err:
+        current_status.append(f"[Step {step_num}] Error: {str(err)[:50]}...")
+    elif tool_calls:
+        for tc in tool_calls:
+            name = getattr(tc, 'name', str(tc))
+            current_status.append(f"[Step {step_num}] Using tool: {name}")
+    elif model_output:
+        current_status.append(f"[Step {step_num}] Thinking & analyzing context...")
     else:
-        console.print(
-            Panel(
-                str(result),
-                title="❌ Failed",
-                border_style="red",
-                padding=(1, 2),
-            )
-        )
+        current_status.append(f"[Step {step_num}] Processing...")
 
+@app.get("/")
+def read_index():
+    with open("ui/index.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read())
 
-# ── Main Loop ────────────────────────────────────────────────────────
+@app.get("/status")
+def get_status():
+    return JSONResponse({"logs": current_status})
 
-def main():
-    print_banner()
-    print_help()
+@app.post("/run-task")
+async def handle_run_task(
+    task: str = Form(...), 
+    files: Optional[List[UploadFile]] = File(None)
+):
+    global current_status
+    current_status = []
+    current_status.append("Task received, analyzing...")
+    
+    task_text = task
+    saved_files = []
+    
+    if files:
+        for file in files:
+            if file.filename:
+                file_path = os.path.join("output", file.filename)
+                with open(file_path, "wb") as f:
+                    f.write(await file.read())
+                saved_files.append(file_path)
+        
+        if saved_files:
+            task_text += f"\n\n[USER ATTACHED FILES: {', '.join(saved_files)}. Please analyze or modify them to fulfill the prompt.]"
 
-    while True:
-        try:
-            user_input = console.input("[bold green]>>> [/bold green]").strip()
-
-            if not user_input:
-                continue
-
-            cmd = user_input.lower()
-
-            if cmd == "exit":
-                console.print("[bold red]Goodbye![/bold red]")
-                sys.exit(0)
-
-            elif cmd == "help":
-                print_help()
-
-            else:
-                handle_task(user_input)
-
-        except KeyboardInterrupt:
-            console.print("\n[bold red]Goodbye![/bold red]")
-            sys.exit(0)
-
-        except Exception as exc:
-            console.print(f"[bold red]Error:[/bold red] {exc}")
-            # Never crash — return to the >>> prompt
-
+    # Run agent in background thread to avoid blocking the async event loop for polling
+    try:
+        result = await asyncio.to_thread(run_agent, task_text, ui_step_callback)
+        success = True
+    except Exception as e:
+        result = f"Error during agent execution: {str(e)}"
+        success = False
+        
+    return JSONResponse({
+        "response": str(result),
+        "success": success
+    })
 
 if __name__ == "__main__":
-    main()
+    print("="*60)
+    print(" 🚀 Synergy Agent Backend Ready ")
+    print(" 💻 Web UI listening on: http://127.0.0.1:8000")
+    print("="*60)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True, log_level="info")

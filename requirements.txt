@@ -6,3 +6,6 @@ requests
 beautifulsoup4
 playwright
 python-pptx
+fastapi
+uvicorn
+python-multipart

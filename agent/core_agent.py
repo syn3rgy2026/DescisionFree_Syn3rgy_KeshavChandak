@@ -123,7 +123,7 @@ def _step_callback(step_log) -> None:
 
 # ── 4. Build a CodeAgent instance ────────────────────────────────────
 
-def build_agent(task: str):
+def build_agent(task: str, step_callback=None):
     """
     Create a fully configured CodeAgent for the given task.
 
@@ -152,12 +152,16 @@ def build_agent(task: str):
         print("⚠️  Tools not loaded — running agent with no tools")
         tools = []
 
+    callbacks = [_step_callback]
+    if step_callback:
+        callbacks.append(step_callback)
+
     agent = CodeAgent(
         tools=tools,
         model=model,
         instructions=instructions,
         max_steps=config.MAX_STEPS,
-        step_callbacks=[_step_callback],
+        step_callbacks=callbacks,
     )
 
     return agent
@@ -165,17 +169,18 @@ def build_agent(task: str):
 
 # ── 4. Run the agent end-to-end ──────────────────────────────────────
 
-def run_agent(task: str) -> str:
+def run_agent(task: str, step_callback=None) -> str:
     """
     Build an agent and execute the task in one call.
 
     Args:
         task: The user's task string.
+        step_callback: Optional extra callback for step observation.
 
     Returns:
         str: The agent's final result.
     """
-    agent = build_agent(task)
+    agent = build_agent(task, step_callback)
     result = agent.run(task)
     return result
 
