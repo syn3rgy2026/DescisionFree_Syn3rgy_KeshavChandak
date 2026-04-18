@@ -133,15 +133,19 @@ def _get_credentials() -> tuple[str, str]:
 
 @tool
 def send_email(to: str, subject: str, body: str) -> str:
-    """Send an email from the user's saved Gmail account. On first use, opens
-    the browser so the user can generate a Gmail App Password, then stores the
-    credentials locally for all future sessions. Always asks for human
-    confirmation before sending because email is irreversible.
+    """Send a beautifully formatted HTML email from the user's saved Gmail account.
+    On first use, opens the browser so the user can generate a Gmail App Password,
+    then stores credentials locally. Always asks for confirmation before sending.
+
+    The body text is auto-formatted into a clean, professional HTML email.
+    Use plain text — the tool handles formatting. Separate paragraphs with
+    blank lines, use '- item' for bullet lists.
 
     Args:
         to: Recipient email address (e.g. 'alice@example.com').
         subject: Subject line of the email.
-        body: Plain-text body of the email.
+        body: Body of the email in plain text. Line breaks and bullet points
+              are auto-formatted into beautiful HTML.
 
     Returns:
         str: 'sent' on success, or an error/cancellation message.
@@ -164,13 +168,21 @@ def send_email(to: str, subject: str, body: str) -> str:
     if response.strip().upper() != "YES":
         return f"Email cancelled by user. (Response: '{response}')"
 
-    # Step 3 — build and send the message
+    # Step 3 — convert body to beautiful HTML
+    html_body = _text_to_html(body, subject, sender_email)
+
+    # Step 4 — build and send the message
     try:
-        msg = MIMEMultipart()
+        msg = MIMEMultipart("alternative")
         msg["From"]    = sender_email
         msg["To"]      = to
         msg["Subject"] = subject
-        msg.attach(MIMEText(body, "plain"))
+
+        # Attach both plain text (fallback) and HTML version
+        # Strip markdown-like chars from plain text fallback
+        clean_text = body.replace("**", "").replace("*", "").replace("##", "").replace("#", "")
+        msg.attach(MIMEText(clean_text, "plain"))
+        msg.attach(MIMEText(html_body, "html"))
 
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
             server.starttls()
@@ -186,6 +198,113 @@ def send_email(to: str, subject: str, body: str) -> str:
         )
     except Exception as e:
         return f"Failed to send email: {e}"
+
+
+def _text_to_html(body: str, subject: str, sender: str) -> str:
+    """Convert plain text body into a beautiful, professional HTML email.
+
+    Handles:
+    - Paragraphs (double newlines)
+    - Bullet lists (lines starting with - or *)
+    - Bold (**text** or __text__)
+    - Italic (*text* or _text_)
+    - Headings (# and ##)
+    """
+    import re
+
+    # Process markdown-like formatting
+    lines = body.split("\n")
+    html_lines = []
+    in_list = False
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Empty line = paragraph break
+        if not stripped:
+            if in_list:
+                html_lines.append("</ul>")
+                in_list = False
+            html_lines.append("<br>")
+            continue
+
+        # Headings
+        if stripped.startswith("## "):
+            if in_list:
+                html_lines.append("</ul>")
+                in_list = False
+            html_lines.append(f'<h3 style="color:#1a1a2e;margin:16px 0 8px 0;font-size:16px;">{stripped[3:]}</h3>')
+            continue
+        if stripped.startswith("# "):
+            if in_list:
+                html_lines.append("</ul>")
+                in_list = False
+            html_lines.append(f'<h2 style="color:#1a1a2e;margin:18px 0 10px 0;font-size:18px;">{stripped[2:]}</h2>')
+            continue
+
+        # Bullet points
+        if stripped.startswith("- ") or stripped.startswith("* "):
+            if not in_list:
+                html_lines.append('<ul style="margin:8px 0;padding-left:20px;">')
+                in_list = True
+            item = stripped[2:]
+            html_lines.append(f'<li style="margin:4px 0;color:#333;">{item}</li>')
+            continue
+
+        # Regular paragraph line
+        if in_list:
+            html_lines.append("</ul>")
+            in_list = False
+        html_lines.append(f'<p style="margin:6px 0;color:#333;line-height:1.6;">{stripped}</p>')
+
+    if in_list:
+        html_lines.append("</ul>")
+
+    content = "\n".join(html_lines)
+
+    # Apply inline formatting: **bold**, *italic*
+    content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', content)
+    content = re.sub(r'__(.+?)__', r'<strong>\1</strong>', content)
+    content = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<em>\1</em>', content)
+
+    # Sender display name
+    sender_name = sender.split("@")[0].replace(".", " ").title()
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background-color:#f4f4f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7;padding:30px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:28px 32px;">
+              <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">{subject}</h1>
+            </td>
+          </tr>
+          <!-- Body -->
+          <tr>
+            <td style="padding:28px 32px 20px 32px;font-size:15px;color:#333333;line-height:1.7;">
+              {content}
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 32px 24px 32px;border-top:1px solid #eee;">
+              <p style="margin:0;color:#999;font-size:12px;">
+                Sent by {sender_name} via Synergy Agent
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+    return html
 
 
 @tool

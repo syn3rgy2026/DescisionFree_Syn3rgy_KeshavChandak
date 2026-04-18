@@ -4,8 +4,10 @@ from tools.file_tool import ALL_TOOLS as FILE_TOOLS
 from tools.shell_tool import SHELL_TOOLS
 from tools.email_tool import send_email, reset_email_credentials
 from tools.email_reader_tool import read_emails
+from tools.human_confirm import ask_human_confirmation
 
 EMAIL_TOOLS = [send_email, reset_email_credentials, read_emails]
+HUMAN_CONFIRM_TOOLS = [ask_human_confirmation]
 
 # ── Memory tools (SQLite only — no ChromaDB) ─────────────────────────
 try:
@@ -72,7 +74,8 @@ except Exception as _e:
 # ── Instagram tools ───────────────────────────────────────────────────
 try:
     from tools.instagram_tool import post_to_instagram, login_to_instagram
-    INSTAGRAM_TOOLS = [post_to_instagram, login_to_instagram]
+    from tools.caption_generator_tool import analyze_and_generate_captions
+    INSTAGRAM_TOOLS = [post_to_instagram, login_to_instagram, analyze_and_generate_captions]
 except Exception as _e:
     print(f"⚠️  Instagram tools failed to load: {_e}", file=sys.stderr)
     INSTAGRAM_TOOLS = []
@@ -113,5 +116,6 @@ ALL_TOOLS = (
     + INSTAGRAM_TOOLS
     + LINKEDIN_TOOLS
     + PPT_TOOLS
+    + HUMAN_CONFIRM_TOOLS
     + LIVE_DATA_TOOLS
 )

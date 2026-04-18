@@ -9,6 +9,7 @@ except ImportError:
 
 logger = logging.getLogger("caption_generator")
 
+
 def generate_captions(image_metadata: dict, platform: str) -> list:
     """
     Generates 3 tailored caption options using an LLM.
@@ -28,20 +29,22 @@ def generate_captions(image_metadata: dict, platform: str) -> list:
         return [f"Mock dynamic caption for {platform} about {image_metadata.get('key_objects', 'this photo')}! #marketing"] * 3
 
     sys_prompt = f"""
-    You are an expert social media marketer.
-    You need to write 3 unique marketing captions for a {platform} post.
+    You are an elite digital marketing strategist and social media growth expert.
+    You need to write 3 highly converting, unique marketing captions for a {platform} post.
     
     Image Context: {image_metadata.get('key_objects')}
     Target Audience: {image_metadata.get('target_audience')}
     Tone: {image_metadata.get('tone')}
     Purpose: {image_metadata.get('purpose')}
     
-    Requirements:
-    - Include a strong Hook in the first line.
-    - Include a Value proposition/message.
-    - Include a Call-to-Action (CTA).
-    - Provide exactly 3 different options separated by '---OPTION---'.
-    - DO NOT use markdown lists, just write the raw caption text.
+    Marketing Requirements:
+    - Include an irresistible, scroll-stopping Hook in the first line (e.g. bold claim, question, or relatable statement).
+    - Frame the core message using copywriting frameworks (like AIDA: Attention, Interest, Desire, Action or PAS: Problem, Agitate, Solution).
+    - Include a clear, compelling Call-to-Action (CTA) such as "Save this for later," "Tag a friend who needs this," or "Click the link in bio."
+    - Append 10-15 highly relevant and trending hashtags strategically placed at the end to maximize organic reach and discoverability.
+    - Use line breaks and emojis to maintain a visually pleasing, easy-to-read structure.
+    - Provide exactly 3 different options separated ONLY by exactly '---OPTION---'.
+    - DO NOT use markdown lists or numbers for the options, just write the raw caption text separated by the delimiter.
     """
 
     try:

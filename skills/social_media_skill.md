@@ -13,10 +13,8 @@ When the user asks you to post content to social media (Instagram or LinkedIn), 
 - You MUST authenticate BEFORE trying to post.
 
 ## STEP 3: Generate Captions
-- Analyze the image context and generate 3 caption options.
-- Instagram captions: emoji-rich, hashtag-heavy, casual and engaging.
-- LinkedIn captions: professional, value-driven, minimal hashtags.
-- Each caption must include: Hook, Core Message, CTA, Hashtags.
+- Call `analyze_and_generate_captions(image_path, platform)` to automatically analyze the image and generate 3 caption options.
+- The tool handles creating the Hook, Core Message, and Call-to-Action for you.
 
 ## STEP 4: Human Confirmation (MANDATORY)
 - Use `ask_human_confirmation()` to show the user:
