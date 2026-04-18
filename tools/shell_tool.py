@@ -4,77 +4,33 @@ shell_tool.py
 -------------
 Executes shell commands in a controlled subprocess with a configurable
 timeout (config.SHELL_TIMEOUT). Always requests human confirmation before
-running any destructive command (rm, sudo, etc.).
+running any destructive command (rm/del, sudo, etc.).
+
+Exposes two smolagents @tool functions:
+  - run_command      : general runner with automatic danger detection
+  - run_safe_command : fast path for pre-approved safe commands
+
+Cross-platform: covers both Unix (rm, ls, pwd, cat, which) and
+Windows (del, rd, rmdir, dir, cd, type, where) equivalents.
 """
 
+import sys
 import subprocess
 import config
+from smolagents import tool
 
 # Importing the human confirmation tool you (Person 2) are also building
 from tools.human_confirm import ask_human_confirmation
 
-def run_command(command: str, require_confirm: bool = False) -> dict:
-    """
-    Execute a shell command and return its stdout, stderr, and exit code.
 
-    Args:
-        command (str): Shell command string to execute.
-        require_confirm (bool): If True, prompt the user for confirmation first.
-
-    Returns:
-        dict: Keys 'stdout', 'stderr', 'returncode'.
-    """
-    if require_confirm:
-        # Pause the agent and ask the human for permission
-        user_response = ask_human_confirmation(
-            action=f"Run shell command: `{command}`",
-            reason="This command was flagged as potentially destructive or touches sensitive system directories.",
-            risk_level="HIGH"
-        )
-        
-        # If the human says anything other than YES, abort the execution
-        if user_response.strip().upper() != "YES":
-            return {
-                'stdout': '',
-                'stderr': 'Execution cancelled by user.',
-                'returncode': -1 # Custom code to indicate manual cancellation
-            }
-
-    try:
-        # Fetch the timeout from config, defaulting to 30 seconds if missing
-        timeout_limit = getattr(config, 'SHELL_TIMEOUT', 30)
-        
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout_limit
-        )
-        
-        return {
-            'stdout': result.stdout,
-            'stderr': result.stderr,
-            'returncode': result.returncode
-        }
-        
-    except subprocess.TimeoutExpired:
-        return {
-            'stdout': '',
-            'stderr': f"Command timed out after {timeout_limit} seconds",
-            'returncode': 124 # Standard Linux timeout exit code
-        }
-    except Exception as e:
-        return {
-            'stdout': '',
-            'stderr': f"An unexpected error occurred: {str(e)}",
-            'returncode': 1
-        }
-
+# ---------------------------------------------------------------------------
+# Internal helpers — NOT exported as tools
+# ---------------------------------------------------------------------------
 
 def is_destructive(command: str) -> bool:
     """
     Heuristically determine whether a command is potentially destructive.
+    Covers both Unix/Linux and Windows command equivalents.
 
     Args:
         command (str): Command string to inspect.
@@ -82,77 +38,166 @@ def is_destructive(command: str) -> bool:
     Returns:
         bool: True if the command should be flagged for confirmation.
     """
-    # The exact risky keywords specified in the project guide
     risky_keywords = [
-        "rm", 
-        "sudo", 
-        "pip install", 
-        "/etc/", 
-        "/sys/", 
-        "/usr/", 
-        "format", 
-        "shutdown"
+        "pip install",
+        # Unix sensitive paths
+        "/etc/", "/sys/", "/usr/",
+        # Cross-platform dangerous ops
+        "format", "shutdown",
     ]
-    
-    # We pad 'rm' and 'sudo' with spaces in our check to avoid accidentally 
-    # flagging safe words that contain those letters (like 'arm' or 'pseudocode')
-    # For directory paths or exact commands, we check them directly.
-    padded_command = f" {command} "
-    
-    if " rm " in padded_command or " sudo " in padded_command:
+
+    stripped = command.strip()
+    padded = f" {stripped} "
+
+    # Unix: rm / sudo
+    if " rm " in padded or stripped.startswith("rm "):
         return True
-        
-    for keyword in ["pip install", "/etc/", "/sys/", "/usr/", "format", "shutdown"]:
+    if " sudo " in padded or stripped.startswith("sudo "):
+        return True
+
+    # Windows: del, rd, rmdir
+    if " del " in padded or stripped.startswith("del "):
+        return True
+    if stripped.startswith("rd ") or stripped.startswith("rmdir "):
+        return True
+
+    for keyword in risky_keywords:
         if keyword in command:
             return True
-            
+
     return False
 
 
-def safe_run(command: str) -> dict:
+def _execute_subprocess(command: str) -> str:
     """
-    Run a command, automatically requiring confirmation if it looks destructive.
+    Low-level subprocess runner. Returns combined stdout + stderr as a string.
+    Called by the public @tool functions after confirmation is handled.
 
     Args:
-        command (str): Shell command string.
+        command (str): Shell command to run.
 
     Returns:
-        dict: Same structure as run_command return value.
+        str: Command output (stdout + stderr combined), or a timeout/error message.
     """
-    # Check if the command hits our heuristic danger list
-    needs_confirm = is_destructive(command)
-    
-    # Pass it to the main executor
-    return run_command(command, require_confirm=needs_confirm)
+    timeout_limit = getattr(config, "SHELL_TIMEOUT", 30)
+
+    try:
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout_limit,
+        )
+        output = result.stdout
+        if result.stderr:
+            output += f"\n[stderr]\n{result.stderr}"
+        return output.strip() or "(no output)"
+
+    except subprocess.TimeoutExpired:
+        return f"Command timed out after {timeout_limit} seconds."
+    except Exception as e:
+        return f"An unexpected error occurred: {str(e)}"
 
 
-# --- TEST BLOCK ---
+# ---------------------------------------------------------------------------
+# Safe-command allow-list (used by run_safe_command)
+# ---------------------------------------------------------------------------
+
+SAFE_PREFIXES = [
+    # Cross-platform
+    "echo", "mkdir", "whoami", "git status", "python --version", "pip list",
+    # Unix / Linux / Mac
+    "ls", "pwd", "cat", "which",
+    # Windows equivalents
+    "dir",    # → ls
+    "cd",     # → pwd  (also valid on Unix)
+    "type",   # → cat
+    "where",  # → which
+]
+
+
+# ---------------------------------------------------------------------------
+# Public smolagents @tool functions
+# ---------------------------------------------------------------------------
+
+@tool
+def run_command(command: str) -> str:
+    """Run a shell command and return its output. Automatically asks for human
+    confirmation before executing any risky or destructive command (those
+    containing rm, del, sudo, rd, rmdir, pip install, format, shutdown, or
+    sensitive Unix paths like /etc/, /sys/, /usr/).
+
+    Args:
+        command: The shell command string to execute.
+
+    Returns:
+        str: Combined stdout and stderr output, or a cancellation / error message.
+    """
+    if is_destructive(command):
+        response = ask_human_confirmation(
+            action=f"Run shell command: `{command}`",
+            reason="This command was flagged as potentially destructive or touches sensitive system directories.",
+            risk_level="HIGH",
+        )
+        if response.strip().upper() != "YES":
+            return f"Execution cancelled by user. (Response: '{response}')"
+
+    return _execute_subprocess(command)
+
+
+@tool
+def run_safe_command(command: str) -> str:
+    """Run a pre-approved safe command without a confirmation prompt.
+    Safe list (Unix): ls, pwd, cat, which, echo, mkdir, whoami, git status,
+    python --version, pip list.
+    Safe list (Windows): dir, cd, type, where, echo, mkdir, whoami, git status,
+    python --version, pip list.
+    If the command is NOT on the safe list it is handed off to run_command,
+    which will ask for confirmation if needed.
+
+    Args:
+        command: The shell command string to execute.
+
+    Returns:
+        str: Combined stdout and stderr output.
+    """
+    stripped = command.strip()
+
+    for safe_prefix in SAFE_PREFIXES:
+        if stripped == safe_prefix or stripped.startswith(safe_prefix + " "):
+            return _execute_subprocess(command)
+
+    # Not in the safe list — delegate to run_command (handles confirmation)
+    return run_command(command)
+
+
+# ---------------------------------------------------------------------------
+# TEST BLOCK
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    import os
-    
-    print("\n" + "="*40)
+    IS_WINDOWS = sys.platform == "win32"
+
+    print("\n" + "=" * 40)
     print("TESTING SHELL TOOL")
-    print("="*40 + "\n")
+    print("=" * 40 + "\n")
 
-    # Test 1: A completely safe command
-    print("--- Test 1: Safe Command (pwd) ---")
-    result_safe = safe_run("pwd")
-    print(f"Stdout:\n{result_safe['stdout'].strip()}")
+    # Test 1: Print current directory — cross-platform
+    dir_cmd = "cd" if IS_WINDOWS else "pwd"
+    print(f"--- Test 1: Safe Command ({dir_cmd}) ---")
+    print(run_safe_command(dir_cmd))
     print("-" * 40 + "\n")
 
-    # Test 2: Another safe command with arguments
+    # Test 2: Echo — works on both platforms
     print("--- Test 2: Safe Command (echo) ---")
-    result_echo = safe_run("echo hello world")
-    print(f"Stdout:\n{result_echo['stdout'].strip()}")
+    print(run_safe_command("echo hello world"))
     print("-" * 40 + "\n")
 
-    # Test 3: A risky command that MUST trigger the confirmation prompt
-    print("--- Test 3: Risky Command (rm) ---")
-    print("Expected: You should be prompted to confirm this action.")
-    # We use a dummy file path so we don't accidentally delete anything real if you type YES
-    result_risky = safe_run("rm /tmp/dummy_test_file.txt") 
-    print(f"Result Code: {result_risky['returncode']}")
-    print(f"Stderr/Stdout: {result_risky['stderr']} {result_risky['stdout']}")
+    # Test 3: Risky delete — MUST trigger the confirmation prompt
+    risky_cmd = "del C:\\nonexistent_dummy.txt" if IS_WINDOWS else "rm /tmp/dummy_test_file.txt"
+    print(f"--- Test 3: Risky Command ({risky_cmd.split()[0]}) ---")
+    print("Expected: You should be prompted to confirm before anything runs.")
+    print(run_safe_command(risky_cmd))
     print("-" * 40 + "\n")
-    
+
     print("Testing complete. If Test 3 paused and asked for confirmation, you are good to go!")
