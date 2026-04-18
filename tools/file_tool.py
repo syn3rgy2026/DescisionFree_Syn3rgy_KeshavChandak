@@ -10,6 +10,8 @@ import json
 from pathlib import Path
 from typing import Optional, Union, List, Dict, Any, Generator
 
+import config
+
 # 14. Logging and Auditing
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("file_tool")
@@ -318,20 +320,79 @@ class FileTool:
 _tool_instance = FileTool()
 
 def read_file(path: str) -> str:
+    """
+    Read and return the contents of a file.
+
+    Args:
+        path (str): Absolute or relative path to the file.
+
+    Returns:
+        str: Full text content of the file.
+    """
     return _tool_instance.read_file(path, mode="full")
 
 def write_file(filename: str, content: str) -> str:
-    # Assuming previous files expected output/ prefix per config, but here keeping straightforward
-    _tool_instance.write_file(filename, content)
-    return filename
+    """
+    Write content to a file inside the output/ directory.
+
+    Args:
+        filename (str): Name of the file to create or overwrite (no path prefix).
+        content (str): Text content to write.
+
+    Returns:
+        str: Absolute path to the written file.
+    """
+    out_dir = getattr(config, "OUTPUT_FOLDER", "./output/")
+    full_path = os.path.abspath(os.path.join(out_dir, filename))
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    _tool_instance.write_file(full_path, content)
+    return full_path
 
 def append_file(filename: str, content: str) -> str:
-    _tool_instance.append_to_file(filename, content)
-    return filename
+    """
+    Append content to an existing file in the output/ directory.
+
+    Args:
+        filename (str): Target filename inside output/.
+        content (str): Text to append.
+
+    Returns:
+        str: Absolute path to the modified file.
+    """
+    out_dir = getattr(config, "OUTPUT_FOLDER", "./output/")
+    full_path = os.path.abspath(os.path.join(out_dir, filename))
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    _tool_instance.append_to_file(full_path, content)
+    return full_path
 
 def list_files(directory: str) -> list:
+    """
+    List all files in the specified directory.
+
+    Args:
+        directory (str): Path to the directory to list.
+
+    Returns:
+        list[str]: Filenames found in the directory.
+    """
     return _tool_instance.list_contentsOf_folder(directory)
 
 def delete_file(path: str) -> bool:
-    _tool_instance.delete_file(path)
-    return True
+    """
+    Delete a file at the given path (restricted to output/ directory).
+
+    Args:
+        path (str): Path to the file to delete.
+
+    Returns:
+        bool: True if deletion succeeded.
+    """
+    out_dir = getattr(config, "OUTPUT_FOLDER", "./output/")
+    if not os.path.isabs(path):
+        path = os.path.abspath(os.path.join(out_dir, path))
+        
+    try:
+        _tool_instance.delete_file(path)
+        return True
+    except Exception:
+        return False
