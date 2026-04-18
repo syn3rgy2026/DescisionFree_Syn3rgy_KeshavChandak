@@ -50,11 +50,16 @@ def get_skills_for_task(task: str) -> str:
 
     # ── Keyword → skill file mapping ─────────────────────────────────
     skill_map: dict[str, list[str]] = {
+        "research_skill.md": [
+            "research", "deep dive", "investigate", "analyze", "analyse",
+            "deep research", "in-depth", "comprehensive", "in depth",
+        ],
         "web_skill.md":    ["search", "browse", "scrape", "url", "web", "http", "website", "crawl"],
         "file_skill.md":   ["save", "write", "read", "csv", "json", "file", "txt", "download", "upload"],
-        "code_skill.md":   ["code", "script", "python", "flask", "backend", "run", "execute", "pip"],
+        "code_skill.md":   ["code", "script", "python", "flask", "backend", "deploy", "run", "execute", "pip"],
         "ppt_skill.md":    ["ppt", "slides", "powerpoint", "presentation", "slide", "deck"],
         "deploy_skill.md": ["deploy", "vercel", "github", "push", "repo", "host", "launch", "publish", "git"],
+        "social_media_skill.md": ["instagram", "linkedin", "post", "social media", "caption", "marketing", "story"],
     }
 
     already_loaded: set[str] = set()
