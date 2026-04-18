@@ -54,6 +54,7 @@ def get_skills_for_task(task: str) -> str:
         "file_skill.md": ["save", "write", "read", "csv", "json", "file", "txt", "download", "upload"],
         "code_skill.md": ["code", "script", "python", "flask", "backend", "deploy", "run", "execute", "pip"],
         "ppt_skill.md":  ["ppt", "slides", "powerpoint", "presentation", "slide", "deck"],
+        "social_media_skill.md": ["instagram", "linkedin", "post", "social media", "caption", "marketing", "story"],
     }
 
     already_loaded: set[str] = set()
