@@ -16,8 +16,10 @@ from rich.panel import Panel
 from rich.rule import Rule
 import config
 from agent.skill_router import get_skills_for_task
+from memory.memory_manager import MemoryManager
 
 _console = Console()
+_memory = MemoryManager()  # singleton — shared across all tasks in the session
 
 
 # ── 1. Load the master prompt ─────────────────────────────────────────
@@ -46,7 +48,12 @@ def load_master_prompt() -> str:
 
 def build_system_prompt(task: str) -> str:
     """
-    Combine the master prompt with skill context for a given task.
+    Combine the master prompt with skill context + memory context.
+
+    Memory context includes:
+    - Recent task history (last 3 tasks)
+    - Past failures (so the agent doesn't repeat mistakes)
+    - Stored user facts/preferences
 
     Args:
         task: The user's task string.
@@ -60,6 +67,14 @@ def build_system_prompt(task: str) -> str:
     system_prompt = master
     if skills:
         system_prompt += "\n\n# Relevant Skills & Instructions\n\n" + skills
+
+    # Inject past memory context so agent can learn from history
+    try:
+        memory_ctx = _memory.build_memory_context(task)
+        if memory_ctx:
+            system_prompt += "\n\n# Memory Context (from past sessions)\n\n" + memory_ctx
+    except Exception as e:
+        _console.print(f"[dim]⚠️ Memory context load failed: {e}[/dim]")
 
     return system_prompt
 
@@ -168,6 +183,7 @@ def build_agent(task: str):
 def run_agent(task: str) -> str:
     """
     Build an agent and execute the task in one call.
+    Automatically saves the result (or error) to persistent memory.
 
     Args:
         task: The user's task string.
@@ -176,8 +192,33 @@ def run_agent(task: str) -> str:
         str: The agent's final result.
     """
     agent = build_agent(task)
-    result = agent.run(task)
-    return result
+
+    try:
+        result = agent.run(task)
+
+        # ── Auto-save successful result to memory ─────────────────────
+        try:
+            _memory.log_task(task=task, result=str(result), status="completed")
+            _console.print("[dim]💾 Task result saved to memory.[/dim]")
+        except Exception as e:
+            _console.print(f"[dim]⚠️ Failed to save to memory: {e}[/dim]")
+
+        return result
+
+    except Exception as exc:
+        # ── Auto-save failure to memory so we don't repeat it ─────────
+        try:
+            _memory.log_task(
+                task=task,
+                result=str(exc),
+                status="error",
+                errors=str(exc),
+            )
+            _console.print("[dim]💾 Task failure saved to memory (will avoid next time).[/dim]")
+        except Exception:
+            pass
+
+        raise  # re-raise so error_recovery can handle it
 
 
 # ── Self-test ────────────────────────────────────────────────────────

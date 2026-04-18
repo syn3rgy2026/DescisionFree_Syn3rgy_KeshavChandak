@@ -14,5 +14,5 @@ PROMPTS_FOLDER  = "./agent/prompts/"
 OUTPUT_FOLDER   = "./output/"
 
 # ── Agent Limits ──────────────────────────────────────────────────────
-MAX_STEPS       = 20
+MAX_STEPS       = 15
 SHELL_TIMEOUT   = 30
