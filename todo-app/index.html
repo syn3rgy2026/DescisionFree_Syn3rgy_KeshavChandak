@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Todo App</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; padding: 50px; }
+        .container { width: 300px; }
+        ul { list-style: none; padding: 0; }
+        li { padding: 8px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; cursor: pointer; }
+        .done { text-decoration: line-through; color: gray; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Todo List</h1>
+        <input type="text" id="todoInput" placeholder="Add a task...">
+        <button onclick="addTask()">Add</button>
+        <ul id="todoList"></ul>
+    </div>
+    <script>
+        function addTask() {
+            const input = document.getElementById('todoInput');
+            if (!input.value) return;
+            const li = document.createElement('li');
+            li.innerHTML = `${input.value} <button onclick="event.stopPropagation(); this.parentElement.remove()">X</button>`;
+            li.onclick = () => li.classList.toggle('done');
+            document.getElementById('todoList').appendChild(li);
+            input.value = '';
+        }
+    </script>
+</body>
+</html>
