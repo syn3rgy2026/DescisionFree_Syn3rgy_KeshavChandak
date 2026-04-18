@@ -7,15 +7,32 @@ and handles errors so the CLI never crashes.
 """
 
 import sys
+import time
+import threading
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.rule import Rule
+from rich.live import Live
+from rich.spinner import Spinner
+from rich.text import Text
 
 from agent.core_agent import run_agent
 from agent.error_recovery import run_with_recovery
+from agent.skill_router import get_skills_for_task
 
 console = Console()
+
+# Messages cycled through during long agent runs (research-aware)
+_THINKING_MESSAGES = [
+    "Agent is thinking...",
+    "Agent is reading a webpage...",
+    "Agent is taking notes...",
+    "Agent is searching the web...",
+    "Agent is synthesising results...",
+    "Agent is planning next steps...",
+    "Agent is writing output...",
+]
 
 
 # ── Welcome Banner ────────────────────────────────────────────────────
@@ -59,14 +76,72 @@ def print_help():
 
 # ── Task Handler ─────────────────────────────────────────────────────
 
+def _run_agent_in_thread(task: str, result_box: list):
+    """Run the agent in a background thread and store (result, success) in result_box."""
+    try:
+        result, success = run_with_recovery(run_agent, task)
+        result_box.append((result, success))
+    except Exception as exc:
+        result_box.append((str(exc), False))
+
+
 def handle_task(task: str):
     """
-    Run the agent with recovery and display the result.
-    Agent step output (Thought / Tool / Observation) prints freely.
+    Run the agent with a live Rich spinner so the user always sees feedback.
+    A background thread cycles through status messages every 8 seconds.
     """
+    # Show which skills were detected — instant feedback
+    skills_text = get_skills_for_task(task)
+    detected = []
+    if "research" in task.lower() or "investigate" in task.lower() or "analyze" in task.lower():
+        detected.append("research_skill")
+    if any(w in task.lower() for w in ["web", "search", "browse", "scrape"]):
+        detected.append("web_skill")
+    if any(w in task.lower() for w in ["ppt", "slide", "presentation"]):
+        detected.append("ppt_skill")
+    if any(w in task.lower() for w in ["code", "script", "python"]):
+        detected.append("code_skill")
+
     console.print(Rule("[bold blue]Agent Starting[/bold blue]", style="blue"))
-    result, success = run_with_recovery(run_agent, task)
+
+    if detected:
+        console.print(f"[dim]📚 Skills loaded: {', '.join(detected)}[/dim]")
+
+    # Run the agent in a background thread
+    result_box: list = []
+    agent_thread = threading.Thread(target=_run_agent_in_thread, args=(task, result_box), daemon=True)
+    agent_thread.start()
+
+    # Show a live spinner while the thread is running
+    start_time = time.time()
+    msg_index  = 0
+
+    with Live(console=console, refresh_per_second=4, transient=True) as live:
+        while agent_thread.is_alive():
+            elapsed = int(time.time() - start_time)
+            mins, secs = divmod(elapsed, 60)
+            time_str = f"{mins}m {secs}s" if mins else f"{secs}s"
+
+            # Cycle status message every 8 seconds
+            msg_index = (elapsed // 8) % len(_THINKING_MESSAGES)
+            status_line = (
+                f"[bold cyan]⟳[/bold cyan]  "
+                f"[dim]{_THINKING_MESSAGES[msg_index]}[/dim]  "
+                f"[dim italic]({time_str})[/dim italic]"
+            )
+            live.update(Text.from_markup(status_line))
+            time.sleep(0.25)
+
+    # Wait for thread to fully finish (should be done by now)
+    agent_thread.join(timeout=5)
+
     console.print(Rule(style="blue"))
+
+    if not result_box:
+        console.print(Panel("Agent did not return a result.", title="❌ Failed", border_style="red"))
+        return
+
+    result, success = result_box[0]
 
     if success:
         console.print(
