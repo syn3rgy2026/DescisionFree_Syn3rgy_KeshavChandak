@@ -92,6 +92,13 @@ except Exception as _e:
     print(f"⚠️  PPT tools failed to load: {_e}", file=sys.stderr)
     PPT_TOOLS = []
 
+# ── Live data tools (cricket, weather, stocks, crypto, news, fx) ──────
+try:
+    from tools.live_data_tools import LIVE_DATA_TOOLS
+except Exception as _e:
+    print(f"⚠️  Live data tools failed to load: {_e}", file=sys.stderr)
+    LIVE_DATA_TOOLS = []
+
 ALL_TOOLS = (
     FILE_TOOLS
     + SHELL_TOOLS
@@ -106,4 +113,5 @@ ALL_TOOLS = (
     + INSTAGRAM_TOOLS
     + LINKEDIN_TOOLS
     + PPT_TOOLS
+    + LIVE_DATA_TOOLS
 )
