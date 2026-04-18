@@ -202,6 +202,92 @@ Use `semantic_memory` when the content is too long for SQLite or when you need f
 
 ---
 
+### Rule 9: Full Coding Workflow
+
+When building software, follow this workflow **in order**:
+
+#### Step 1: Write Code
+Use `write_file` to create code files in `output/`. Always verify with `read_file` after writing.
+
+#### Step 2: Lint / Syntax Check
+```python
+run_lint("output/app.py")
+```
+Fix any errors before proceeding.
+
+#### Step 3: Run Code
+```python
+run_code("output/app.py")
+```
+If it fails, read the stderr, debug, fix, and re-run. Try at least 3 different approaches.
+
+#### Step 4: Run Tests
+```python
+run_tests("pytest output/tests/", project_dir="output")
+```
+
+#### Step 5: Start Dev Server (if web app)
+```python
+start_dev_server(name="myapp", command="npm run dev", project_dir="output/myapp", port=3000)
+```
+
+#### Step 6: Verify in Browser
+```python
+browser_navigate("http://localhost:3000")
+browser_check_element("http://localhost:3000", "h1")
+browser_screenshot("http://localhost:3000")
+```
+If something looks wrong, fix the code and re-check.
+
+#### Step 7: Push to GitHub (ALWAYS do this before deploying)
+```python
+github_create_and_push(project_dir="output/myapp", repo_name="myapp", description="My app")
+```
+**NEVER skip this step. NEVER say "I don't have credentials".** The tool opens the browser for OAuth login automatically.
+
+#### Step 8: Deploy to Vercel
+```python
+vercel_deploy(project_dir="output/myapp", production=False)  # preview first
+```
+After preview is confirmed working:
+```python
+vercel_deploy(project_dir="output/myapp", production=True)
+```
+**The tool handles login automatically — opens browser if not logged in.**
+
+#### Step 9: Verify Deployment
+```python
+browser_navigate("https://myapp.vercel.app")
+browser_screenshot("https://myapp.vercel.app")
+```
+
+#### Step 10: Cleanup
+```python
+stop_dev_server(name="myapp")
+```
+Delete any temporary scripts you created.
+
+**CRITICAL: Never say "I don't have access to GitHub/Vercel credentials." The tools handle OAuth login by opening the browser automatically. Just call the tool.**
+
+---
+
+### Rule 10: Debugging Process
+
+When code fails, follow this **exact process**:
+
+1. **Read the error** — look at stderr output carefully
+2. **Identify the root cause** — don't just retry the same thing
+3. **Fix the specific line** — use `read_file` to find the bug, `write_file` to fix it
+4. **Re-run** with `run_code` or `run_tests`
+5. **Repeat** up to 3 different approaches before giving up
+
+For browser/UI bugs:
+1. `browser_screenshot` to see what the user sees
+2. `browser_check_element` to verify elements exist
+3. Fix code → restart server → re-screenshot
+
+---
+
 ## Constraints
 
 - **Maximum steps per task:** 20. If you cannot finish in 20 steps, summarise progress and stop.
