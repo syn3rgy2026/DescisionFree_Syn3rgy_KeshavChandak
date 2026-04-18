@@ -197,16 +197,52 @@ class MemoryManager:
                 + "\n".join(lines)
             )
 
-        # 3. Search for tasks related to the current one
-        # Extract key words from the task
-        keywords = [w for w in task.lower().split() if len(w) > 3][:5]
-        related_seen = set()
-        for kw in keywords:
-            related = self.search_history(kw, 2)
-            for entry in related:
-                key = entry["task"][:50]
-                if key not in related_seen:
-                    related_seen.add(key)
+        # 3. Scan actual files on disk so the agent knows what exists
+        # This is the KEY fix — the agent couldn't find research files before
+        try:
+            import glob
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            scan_dirs = [project_root, os.path.join(project_root, "output")]
+            extensions = ["*.md", "*.txt", "*.py", "*.html", "*.csv", "*.json", "*.docx", "*.pptx"]
+            found_files = []
+
+            for scan_dir in scan_dirs:
+                if not os.path.isdir(scan_dir):
+                    continue
+                for ext in extensions:
+                    for f in glob.glob(os.path.join(scan_dir, ext)):
+                        basename = os.path.basename(f)
+                        # Skip hidden files and common config
+                        if basename.startswith(".") or basename in ("config.py", "main.py", "requirements.txt"):
+                            continue
+                        rel = os.path.relpath(f, project_root)
+                        size = os.path.getsize(f)
+                        if size > 0:
+                            found_files.append(f"- `{rel}` ({size} bytes)")
+
+            # Also scan output/ subdirectories one level deep
+            output_dir = os.path.join(project_root, "output")
+            if os.path.isdir(output_dir):
+                for subdir in os.listdir(output_dir):
+                    subpath = os.path.join(output_dir, subdir)
+                    if os.path.isdir(subpath):
+                        for ext in extensions:
+                            for f in glob.glob(os.path.join(subpath, ext)):
+                                basename = os.path.basename(f)
+                                if not basename.startswith("."):
+                                    rel = os.path.relpath(f, project_root)
+                                    size = os.path.getsize(f)
+                                    if size > 0:
+                                        found_files.append(f"- `{rel}` ({size} bytes)")
+
+            if found_files:
+                sections.append(
+                    "## Files Available on Disk\n"
+                    "These files exist in the project. You can read them with `read_file`.\n\n"
+                    + "\n".join(found_files[:20])  # cap at 20 to avoid bloat
+                )
+        except Exception:
+            pass
 
         # 4. User facts from persistent memory
         try:
