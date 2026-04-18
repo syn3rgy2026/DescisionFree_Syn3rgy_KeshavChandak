@@ -88,6 +88,13 @@ except Exception as _e:
     print(f"⚠️  LinkedIn tools failed to load: {_e}", file=sys.stderr)
     LINKEDIN_TOOLS = []
 
+# ── PowerPoint tools ──────────────────────────────────────────────────
+try:
+    from tools.ppt_tool import PPT_TOOLS
+except Exception as _e:
+    print(f"⚠️  PPT tools failed to load: {_e}", file=sys.stderr)
+    PPT_TOOLS = []
+
 ALL_TOOLS = (
     FILE_TOOLS
     + SHELL_TOOLS
@@ -101,4 +108,5 @@ ALL_TOOLS = (
     + FILE_WATCHER_TOOLS
     + INSTAGRAM_TOOLS
     + LINKEDIN_TOOLS
+    + PPT_TOOLS
 )
