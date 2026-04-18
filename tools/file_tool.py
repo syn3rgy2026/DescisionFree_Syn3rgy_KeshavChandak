@@ -20,14 +20,6 @@ import logging
 from typing import Optional, List, Dict, Any
 from smolagents import tool
 
-import json
-from pathlib import Path
-from typing import Optional, Union, List, Dict, Any, Generator
-
-from smolagents import tool
-import config
-
-# 14. Logging and Auditing
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("file_tool")
 
@@ -72,12 +64,6 @@ def write_file(filename: str, content: str) -> str:
     with open(full_path, "w", encoding="utf-8") as f:
         f.write(content)
     _log_action("Write file", f"Written to {full_path}")
-    if os.path.isabs(filename):
-        full_path = filename
-    else:
-        full_path = os.path.abspath(filename)
-    os.makedirs(os.path.dirname(full_path), exist_ok=True)
-    _tool_instance.write_file(full_path, content)
     return full_path
 
 @tool
@@ -96,9 +82,6 @@ def append_file(filename: str, content: str) -> str:
     with open(full_path, "a", encoding="utf-8") as f:
         f.write(content)
     _log_action("Append file", f"Appended to {full_path}")
-    full_path = filename if os.path.isabs(filename) else os.path.abspath(filename)
-    os.makedirs(os.path.dirname(full_path), exist_ok=True)
-    _tool_instance.append_to_file(full_path, content)
     return full_path
 
 @tool
@@ -304,100 +287,4 @@ ALL_TOOLS = [
     create_excel_file,
     create_word_document,
     create_ppt_presentation
-]
-
-
-# ── smolagents @tool wrappers ─────────────────────────────────────────
-
-@tool
-def tool_read_file(path: str) -> str:
-    """
-    Read and return the full text content of any file.
-
-    Args:
-        path: Absolute or project-relative path to the file.
-
-    Returns:
-        The complete text content of the file.
-    """
-    return read_file(path)
-
-
-@tool
-def tool_write_file(filename: str, content: str) -> str:
-    """
-    Write text content to a file inside the output/ directory.
-    Creates the file if it does not exist; overwrites it if it does.
-
-    Args:
-        filename: Name of the file to create/overwrite (e.g. 'report.md').
-        content: Full text content to write into the file.
-
-    Returns:
-        Absolute path of the written file.
-    """
-    return write_file(filename, content)
-
-
-# ── why sample.txt goes to output/ ───────────────────────────────────
-# tool_write_file sandboxes plain filenames (e.g. "sample.txt") to
-# OUTPUT_FOLDER so agent output stays organised.
-# If the agent passes a path like "./sample.txt" or an absolute path
-# the sandbox is bypassed and the file is written exactly there.
-# ─────────────────────────────────────────────────────────────────────
-
-@tool
-def tool_append_file(filename: str, content: str) -> str:
-    """
-    Append text to the end of an existing file in the output/ directory.
-    Creates the file first if it does not yet exist.
-
-    Args:
-        filename: Target filename inside output/ (e.g. 'notes.txt').
-        content: Text to append.
-
-    Returns:
-        Absolute path of the modified file.
-    """
-    return append_file(filename, content)
-
-
-@tool
-def tool_list_files(directory: str) -> str:
-    """
-    List all files and folders inside a directory.
-
-    Args:
-        directory: Path to the directory to inspect.
-
-    Returns:
-        Newline-separated list of filenames found in the directory.
-    """
-    entries = list_files(directory)
-    return "\n".join(entries) if entries else "(empty directory)"
-
-
-@tool
-def tool_delete_file(path: str) -> str:
-    """
-    Delete a file. Path is resolved relative to output/ if not absolute.
-
-    Args:
-        path: Path of the file to delete.
-
-    Returns:
-        'deleted' if successful, 'not found or error' otherwise.
-    """
-    ok = delete_file(path)
-    return "deleted" if ok else "not found or error"
-
-
-# ── exported tool list ────────────────────────────────────────────────
-
-ALL_TOOLS = [
-    tool_read_file,
-    tool_write_file,
-    tool_append_file,
-    tool_list_files,
-    tool_delete_file,
 ]

@@ -20,6 +20,7 @@ ENV/
 # ── Environment / secrets ────────────────────────────────
 .env
 !.env.example
+tools/email_creds.txt
 
 # ── Output artefacts ─────────────────────────────────────
 output/*
