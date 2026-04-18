@@ -19,6 +19,9 @@ import json
 import logging
 from typing import Optional, List, Dict, Any
 from smolagents import tool
+from tools.scraper_tool import scrape_website, scrape_website_structured
+from tools.web_screenshot import capture_website_screenshot
+from tools.web_search_tool import search_web, search_news
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("file_tool")
@@ -286,5 +289,10 @@ ALL_TOOLS = [
     write_csv_file,
     create_excel_file,
     create_word_document,
-    create_ppt_presentation
+    create_ppt_presentation,
+    scrape_website,
+    scrape_website_structured,
+    capture_website_screenshot,
+    search_web,
+    search_news
 ]
