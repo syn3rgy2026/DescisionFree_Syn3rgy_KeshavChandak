@@ -376,4 +376,352 @@ def github_logout() -> str:
         return f"⚠ Logout may have failed: {r['err'][:300]}"
 
 
-GITHUB_TOOLS = [github_create_and_push, github_push, github_clone, github_status, github_logout]
+# ═══════════════════════════════════════════════════════════════════════
+#  Branch tools
+# ═══════════════════════════════════════════════════════════════════════
+
+@tool
+def github_create_branch(project_dir: str, branch_name: str, from_branch: str = "main") -> str:
+    """Create a new git branch and switch to it.
+
+    Args:
+        project_dir: Path to the project directory.
+        branch_name: Name for the new branch (e.g. 'feature/add-login').
+        from_branch: Branch to create from (default: main).
+
+    Returns:
+        str: Result message.
+    """
+    if not os.path.isdir(project_dir):
+        return f"ERROR: Directory not found: {project_dir}"
+
+    _console.print(f"[dim]🌿 Creating branch '{branch_name}' from '{from_branch}'...[/dim]")
+
+    _cmd(f"git checkout {from_branch}", cwd=project_dir)
+    _cmd("git pull", cwd=project_dir)
+    r = _cmd(f"git checkout -b {branch_name}", cwd=project_dir)
+
+    if r["ok"]:
+        _console.print(f"[bold green]✅ Created and switched to branch '{branch_name}'[/bold green]")
+        return f"✅ Created branch '{branch_name}' from '{from_branch}'. Now on '{branch_name}'."
+    return f"❌ Failed: {r['err'] or r['out']}"
+
+
+@tool
+def github_switch_branch(project_dir: str, branch_name: str) -> str:
+    """Switch to an existing git branch.
+
+    Args:
+        project_dir: Path to the project directory.
+        branch_name: Branch to switch to.
+
+    Returns:
+        str: Result message.
+    """
+    if not os.path.isdir(project_dir):
+        return f"ERROR: Directory not found: {project_dir}"
+
+    _console.print(f"[dim]🔀 Switching to branch '{branch_name}'...[/dim]")
+    r = _cmd(f"git checkout {branch_name}", cwd=project_dir)
+
+    if r["ok"]:
+        _console.print(f"[green]✅ Switched to '{branch_name}'[/green]")
+        return f"✅ Switched to branch '{branch_name}'."
+    return f"❌ Failed: {r['err'] or r['out']}"
+
+
+@tool
+def github_list_branches(project_dir: str) -> str:
+    """List all local and remote git branches.
+
+    Args:
+        project_dir: Path to the project directory.
+
+    Returns:
+        str: List of branches.
+    """
+    if not os.path.isdir(project_dir):
+        return f"ERROR: Directory not found: {project_dir}"
+
+    r = _cmd("git branch -a", cwd=project_dir)
+    if r["ok"]:
+        _console.print(f"[green]✅ Branches:[/green]\n{r['out']}")
+        return f"Branches:\n{r['out']}"
+    return f"❌ Failed: {r['err']}"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Pull Request tools
+# ═══════════════════════════════════════════════════════════════════════
+
+@tool
+def github_create_pr(project_dir: str, title: str, body: str = "", base: str = "main", draft: bool = False) -> str:
+    """Create a Pull Request on GitHub from the current branch.
+
+    Pushes the current branch first, then creates a PR against the base branch.
+    Requires GitHub CLI authentication (automatic).
+
+    Args:
+        project_dir: Path to the project directory.
+        title: PR title (e.g. 'Add user authentication').
+        body: PR description/body text.
+        base: Target branch to merge into (default: main).
+        draft: If True, create as a draft PR.
+
+    Returns:
+        str: PR URL or error message.
+    """
+    if not os.path.isdir(project_dir):
+        return f"ERROR: Directory not found: {project_dir}"
+
+    err = _ensure_gh_logged_in()
+    if err:
+        return f"❌ {err}"
+
+    _console.print(f"[dim]📤 Pushing current branch...[/dim]")
+
+    # Get current branch name
+    r = _cmd("git branch --show-current", cwd=project_dir)
+    current_branch = r["out"].strip() if r["ok"] else "unknown"
+
+    # Stage, commit, push
+    _cmd("git add -A", cwd=project_dir)
+    _cmd('git commit -m "Update before PR"', cwd=project_dir)
+    _cmd(f"git push -u origin {current_branch}", cwd=project_dir)
+
+    # Create PR
+    _console.print(f"[dim]📝 Creating PR: '{title}' ({current_branch} → {base})...[/dim]")
+    cmd = f'gh pr create --title "{title}" --base {base}'
+    if body:
+        cmd += f' --body "{body}"'
+    else:
+        cmd += ' --body ""'
+    if draft:
+        cmd += " --draft"
+
+    r = _cmd(cmd, cwd=project_dir, timeout=30)
+
+    if r["ok"]:
+        pr_url = r["out"].strip()
+        _console.print(Panel(
+            f"[bold green]✅ PR created![/bold green]\n\n"
+            f"[bold]🔗 URL:[/bold]  {pr_url}\n"
+            f"[bold]📋 Title:[/bold] {title}\n"
+            f"[bold]🔀 Branch:[/bold] {current_branch} → {base}",
+            title="[bold green]Pull Request Created[/bold green]",
+            border_style="green",
+            padding=(1, 2),
+        ))
+        webbrowser.open(pr_url)
+        return f"✅ PR created!\n🔗 URL: {pr_url}\nTitle: {title}\n{current_branch} → {base}"
+    return f"❌ Failed to create PR:\n{r['err'] or r['out']}"
+
+
+@tool
+def github_list_prs(project_dir: str, state: str = "open") -> str:
+    """List Pull Requests for the current repository.
+
+    Args:
+        project_dir: Path to the project directory.
+        state: Filter by state: 'open', 'closed', 'merged', or 'all'.
+
+    Returns:
+        str: List of PRs.
+    """
+    err = _ensure_gh_logged_in()
+    if err:
+        return f"❌ {err}"
+
+    _console.print(f"[dim]📋 Listing {state} PRs...[/dim]")
+    r = _cmd(f"gh pr list --state {state} --limit 10", cwd=project_dir, timeout=15)
+
+    if r["ok"]:
+        if r["out"]:
+            _console.print(Panel(
+                f"[white]{r['out']}[/white]",
+                title=f"[bold blue]Pull Requests ({state})[/bold blue]",
+                border_style="blue",
+                padding=(0, 2),
+            ))
+            return r["out"]
+        return f"No {state} PRs found."
+    return f"❌ Failed: {r['err']}"
+
+
+@tool
+def github_merge_pr(project_dir: str, pr_number: int = 0, method: str = "merge") -> str:
+    """Merge a Pull Request.
+
+    Args:
+        project_dir: Path to the project directory.
+        pr_number: PR number to merge. If 0, merges the PR for the current branch.
+        method: Merge method: 'merge', 'squash', or 'rebase'.
+
+    Returns:
+        str: Merge result.
+    """
+    err = _ensure_gh_logged_in()
+    if err:
+        return f"❌ {err}"
+
+    pr_ref = str(pr_number) if pr_number > 0 else ""
+    _console.print(f"[dim]🔀 Merging PR {pr_ref or '(current branch)'}...[/dim]")
+    r = _cmd(f"gh pr merge {pr_ref} --{method} --delete-branch", cwd=project_dir, timeout=30)
+
+    if r["ok"]:
+        _console.print(f"[bold green]✅ PR merged via {method}![/bold green]")
+        return f"✅ PR merged via {method}. Branch deleted."
+    return f"❌ Merge failed:\n{r['err'] or r['out']}"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Issue tools
+# ═══════════════════════════════════════════════════════════════════════
+
+@tool
+def github_create_issue(project_dir: str, title: str, body: str = "", labels: str = "") -> str:
+    """Create a GitHub Issue on the current repository.
+
+    Args:
+        project_dir: Path to the project directory.
+        title: Issue title.
+        body: Issue description.
+        labels: Comma-separated labels (e.g. 'bug,high-priority').
+
+    Returns:
+        str: Issue URL or error message.
+    """
+    err = _ensure_gh_logged_in()
+    if err:
+        return f"❌ {err}"
+
+    _console.print(f"[dim]📝 Creating issue: '{title}'...[/dim]")
+    cmd = f'gh issue create --title "{title}"'
+    if body:
+        cmd += f' --body "{body}"'
+    else:
+        cmd += ' --body ""'
+    if labels:
+        cmd += f' --label "{labels}"'
+
+    r = _cmd(cmd, cwd=project_dir, timeout=15)
+
+    if r["ok"]:
+        issue_url = r["out"].strip()
+        _console.print(f"[bold green]✅ Issue created: {issue_url}[/bold green]")
+        return f"✅ Issue created!\n🔗 URL: {issue_url}\nTitle: {title}"
+    return f"❌ Failed:\n{r['err'] or r['out']}"
+
+
+@tool
+def github_list_issues(project_dir: str, state: str = "open") -> str:
+    """List GitHub Issues for the current repository.
+
+    Args:
+        project_dir: Path to the project directory.
+        state: Filter: 'open', 'closed', or 'all'.
+
+    Returns:
+        str: List of issues.
+    """
+    err = _ensure_gh_logged_in()
+    if err:
+        return f"❌ {err}"
+
+    _console.print(f"[dim]📋 Listing {state} issues...[/dim]")
+    r = _cmd(f"gh issue list --state {state} --limit 10", cwd=project_dir, timeout=15)
+
+    if r["ok"]:
+        if r["out"]:
+            _console.print(Panel(
+                f"[white]{r['out']}[/white]",
+                title=f"[bold blue]Issues ({state})[/bold blue]",
+                border_style="blue",
+                padding=(0, 2),
+            ))
+            return r["out"]
+        return f"No {state} issues found."
+    return f"❌ Failed: {r['err']}"
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Repo management tools
+# ═══════════════════════════════════════════════════════════════════════
+
+@tool
+def github_fork(repo: str, target_dir: str = "") -> str:
+    """Fork a GitHub repository to your account and optionally clone it.
+
+    Args:
+        repo: Repository to fork (e.g. 'facebook/react' or full URL).
+        target_dir: If provided, clone the fork into this directory.
+
+    Returns:
+        str: Fork result with URL.
+    """
+    err = _ensure_gh_logged_in()
+    if err:
+        return f"❌ {err}"
+
+    _console.print(f"[dim]🍴 Forking {repo}...[/dim]")
+    cmd = f"gh repo fork {repo} --clone=false"
+    r = _cmd(cmd, timeout=30)
+
+    if r["ok"] or "already exists" in (r["err"] + r["out"]).lower():
+        username = _get_gh_user()
+        repo_name = repo.split("/")[-1] if "/" in repo else repo
+        fork_url = f"https://github.com/{username}/{repo_name}"
+
+        if target_dir:
+            _console.print(f"[dim]📥 Cloning fork...[/dim]")
+            _cmd(f"gh repo clone {username}/{repo_name} {target_dir}", timeout=60)
+
+        _console.print(f"[bold green]✅ Forked to {fork_url}[/bold green]")
+        return f"✅ Forked {repo} → {fork_url}"
+    return f"❌ Fork failed:\n{r['err'] or r['out']}"
+
+
+@tool
+def github_list_repos(username: str = "", limit: int = 10) -> str:
+    """List GitHub repositories for a user (defaults to your account).
+
+    Args:
+        username: GitHub username. Leave empty for your own repos.
+        limit: Max repos to show (default 10).
+
+    Returns:
+        str: List of repositories.
+    """
+    err = _ensure_gh_logged_in()
+    if err:
+        return f"❌ {err}"
+
+    if not username:
+        username = _get_gh_user()
+
+    _console.print(f"[dim]📋 Listing repos for @{username}...[/dim]")
+    r = _cmd(f"gh repo list {username} --limit {limit}", timeout=15)
+
+    if r["ok"]:
+        _console.print(Panel(
+            f"[white]{r['out']}[/white]",
+            title=f"[bold blue]Repos for @{username}[/bold blue]",
+            border_style="blue",
+            padding=(0, 2),
+        ))
+        return r["out"]
+    return f"❌ Failed: {r['err']}"
+
+
+GITHUB_TOOLS = [
+    # Core
+    github_create_and_push, github_push, github_clone, github_status, github_logout,
+    # Branches
+    github_create_branch, github_switch_branch, github_list_branches,
+    # Pull Requests
+    github_create_pr, github_list_prs, github_merge_pr,
+    # Issues
+    github_create_issue, github_list_issues,
+    # Repo management
+    github_fork, github_list_repos,
+]
