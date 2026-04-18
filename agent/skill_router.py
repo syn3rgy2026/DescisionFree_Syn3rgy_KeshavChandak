@@ -1,58 +1,98 @@
-# OWNER: Person 1
 """
 skill_router.py
 ---------------
-Maps LLM-requested tool names to concrete tool implementations and
-loads the matching skill prompt from the skills/ folder.
-
-Responsibilities:
-- Maintain a registry of available tool names → tool callables
-- Load and return the .md skill prompt for a given skill name
-- Validate that a requested tool exists before dispatching
+Loads skill markdown files from the skills/ folder and routes
+them to the agent based on keyword matching against the user's task.
 """
 
+import os
 import config
 
 
-class SkillRouter:
-    """Routes a tool-call name to the correct tool function and skill prompt."""
+def load_skill_file(filename: str) -> str:
+    """
+    Read a single skill file from the skills folder.
 
-    def __init__(self):
-        """Build the tool registry by importing all tool modules."""
-        raise NotImplementedError("Person 1 will implement this")
+    Args:
+        filename: Name of the .md file inside SKILLS_FOLDER.
 
-    def get_tool(self, tool_name: str):
-        """
-        Return the callable for the requested tool.
+    Returns:
+        Contents of the file as a string.
+        Returns empty string if file not found.
+    """
+    filepath = os.path.join(config.SKILLS_FOLDER, filename)
+    if not os.path.exists(filepath):
+        print(f"⚠️  Warning: Skill file not found — {filepath}")
+        return ""
+    with open(filepath, "r", encoding="utf-8") as f:
+        return f.read()
 
-        Args:
-            tool_name (str): Identifier of the tool (e.g. 'browser', 'shell').
 
-        Returns:
-            callable: The tool function to invoke.
+def get_skills_for_task(task: str) -> str:
+    """
+    Analyse the task string, load core_agent_skill.md plus any
+    keyword-matched skill files, and return them combined.
 
-        Raises:
-            ValueError: If tool_name is not registered.
-        """
-        raise NotImplementedError("Person 1 will implement this")
+    Args:
+        task: The raw task string from the user.
 
-    def load_skill_prompt(self, skill_name: str) -> str:
-        """
-        Read and return the content of a skill .md file.
+    Returns:
+        A single string containing all relevant skill file contents,
+        separated by dividers.
+    """
+    task_lower = task.lower()
+    loaded_sections: list[str] = []
 
-        Args:
-            skill_name (str): Name of the skill file without extension.
+    # ── Always load the core skill ────────────────────────────────────
+    core = load_skill_file("core_agent_skill.md")
+    if core:
+        loaded_sections.append(core)
 
-        Returns:
-            str: Raw markdown content of the skill prompt.
-        """
-        raise NotImplementedError("Person 1 will implement this")
+    # ── Keyword → skill file mapping ─────────────────────────────────
+    skill_map: dict[str, list[str]] = {
+        "web_skill.md":  ["search", "browse", "scrape", "url", "web", "http", "website", "crawl"],
+        "file_skill.md": ["save", "write", "read", "csv", "json", "file", "txt", "download", "upload"],
+        "code_skill.md": ["code", "script", "python", "flask", "backend", "deploy", "run", "execute", "pip"],
+        "ppt_skill.md":  ["ppt", "slides", "powerpoint", "presentation", "slide", "deck"],
+    }
 
-    def list_tools(self) -> list:
-        """
-        Return a list of all registered tool names.
+    already_loaded: set[str] = set()
 
-        Returns:
-            list[str]: Registered tool identifiers.
-        """
-        raise NotImplementedError("Person 1 will implement this")
+    for skill_file, keywords in skill_map.items():
+        if skill_file in already_loaded:
+            continue
+        for kw in keywords:
+            if kw in task_lower:
+                content = load_skill_file(skill_file)
+                if content:
+                    loaded_sections.append(content)
+                    already_loaded.add(skill_file)
+                break  # one keyword match is enough for this skill
+
+    # ── Combine with separators ───────────────────────────────────────
+    separator = "\n\n---\n\n"
+    return separator.join(loaded_sections)
+
+
+# ── Quick self-test ───────────────────────────────────────────────────
+if __name__ == "__main__":
+    test_tasks = [
+        "Search the web for Python tutorials",
+        "Save the results to a CSV file",
+        "Write a Flask backend API",
+        "Create a PowerPoint presentation about AI",
+        "Summarise the meeting notes for me",
+    ]
+
+    for t in test_tasks:
+        print(f"\n{'='*60}")
+        print(f"Task: {t}")
+        print(f"{'='*60}")
+        result = get_skills_for_task(t)
+        if result:
+            # Show first 120 chars of each loaded section
+            for i, section in enumerate(result.split("---"), 1):
+                preview = section.strip()[:120]
+                print(f"  Skill {i}: {preview}...")
+        else:
+            print("  (no skills matched)")

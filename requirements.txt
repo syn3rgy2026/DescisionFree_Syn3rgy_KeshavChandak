@@ -1,9 +1,8 @@
 smolagents
 openai
+python-dotenv
+rich
 requests
 beautifulsoup4
-python-pptx
-browser-use
 playwright
-rich
-python-dotenv
+python-pptx

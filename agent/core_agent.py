@@ -1,81 +1,213 @@
-# OWNER: Person 1
 """
 core_agent.py
 -------------
-Central orchestrator for Synergy Agent. Responsible for:
-- Receiving a user task string
-- Loading the master prompt and relevant skill prompts
-- Sending requests to the InferX LLM endpoint via the OpenAI-compatible API
-- Iterating through a ReAct-style think → act → observe loop (up to MAX_STEPS)
-- Delegating tool calls to the appropriate tool modules
-- Returning the final answer or artifact path to main.py
+Central orchestrator for Synergy Agent.
+
+Provides four functions:
+  1. load_master_prompt   — read master_prompt.md
+  2. build_system_prompt  — combine master prompt + skill context
+  3. build_agent          — create a ready-to-use CodeAgent
+  4. run_agent            — build + run in one call
 """
 
+import os
+from rich.console import Console
+from rich.panel import Panel
+from rich.rule import Rule
 import config
+from agent.skill_router import get_skills_for_task
+
+_console = Console()
 
 
-class CoreAgent:
-    """Manages the full agentic loop for a single user task."""
+# ── 1. Load the master prompt ─────────────────────────────────────────
 
-    def __init__(self):
-        """Initialise the agent: load config, prepare skill router and memory manager."""
-        raise NotImplementedError("Person 1 will implement this")
+def load_master_prompt() -> str:
+    """
+    Read master_prompt.md from the prompts folder.
 
-    def load_system_prompt(self) -> str:
-        """
-        Read master_prompt.md and inject current date, available skills,
-        and user memory context into the prompt string.
+    Returns:
+        str: The master prompt content.
+             Falls back to a basic string if the file is missing.
+    """
+    filepath = os.path.join(config.PROMPTS_FOLDER, "master_prompt.md")
+    if not os.path.exists(filepath):
+        print("⚠️  master_prompt.md not found — using fallback prompt")
+        return (
+            "You are Synergy Agent, an autonomous execution agent. "
+            "Complete the user's task step-by-step using available tools. "
+            "Always verify your work before finishing."
+        )
+    with open(filepath, "r", encoding="utf-8") as f:
+        return f.read()
 
-        Returns:
-            str: Fully-rendered system prompt.
-        """
-        raise NotImplementedError("Person 1 will implement this")
 
-    def run(self, task: str) -> str:
-        """
-        Execute the agentic loop for the given task.
+# ── 2. Build the full system prompt ──────────────────────────────────
 
-        Args:
-            task (str): Raw user instruction from the CLI.
+def build_system_prompt(task: str) -> str:
+    """
+    Combine the master prompt with skill context for a given task.
 
-        Returns:
-            str: Final response or path to generated output.
-        """
-        raise NotImplementedError("Person 1 will implement this")
+    Args:
+        task: The user's task string.
 
-    def _call_llm(self, messages: list) -> dict:
-        """
-        Send a chat-completion request to the InferX endpoint.
+    Returns:
+        str: A complete system prompt ready for the LLM.
+    """
+    master = load_master_prompt()
+    skills = get_skills_for_task(task)
 
-        Args:
-            messages (list): OpenAI-style message list.
+    system_prompt = master
+    if skills:
+        system_prompt += "\n\n# Relevant Skills & Instructions\n\n" + skills
 
-        Returns:
-            dict: Raw API response dict.
-        """
-        raise NotImplementedError("Person 1 will implement this")
+    return system_prompt
 
-    def _parse_action(self, llm_response: dict) -> tuple:
-        """
-        Extract the tool name and arguments from an LLM response.
 
-        Args:
-            llm_response (dict): Raw response from _call_llm.
+# ── 3. Step callback — prints Thought + Tool per step ───────────────
 
-        Returns:
-            tuple: (tool_name: str, tool_args: dict)
-        """
-        raise NotImplementedError("Person 1 will implement this")
+def _step_callback(step_log) -> None:
+    """
+    Called by smolagents after every agent step.
+    CodeAgent produces code (model_output) and runs it (observations).
+    """
+    step_num = getattr(step_log, 'step_number', '?')
 
-    def _execute_action(self, tool_name: str, tool_args: dict) -> str:
-        """
-        Dispatch a parsed action to the correct tool via SkillRouter.
+    _console.print(Rule(f"[bold blue]Step {step_num}[/bold blue]", style="blue"))
 
-        Args:
-            tool_name (str): Name of the tool to invoke.
-            tool_args (dict): Arguments for the tool.
+    # ── Thought: raw LLM output (includes generated code) ────────────
+    model_output = getattr(step_log, 'model_output', None)
+    if model_output:
+        _console.print(
+            Panel(
+                f"[cyan]{str(model_output).strip()}[/cyan]",
+                title="[blue]💭 Thought / Code[/blue]",
+                border_style="blue",
+                padding=(0, 2),
+            )
+        )
 
-        Returns:
-            str: Observation string to feed back into the loop.
-        """
-        raise NotImplementedError("Person 1 will implement this")
+    # ── Tool used (ToolCallingAgent path, shown if present) ──────────
+    tool_calls = getattr(step_log, 'tool_calls', None)
+    if tool_calls:
+        for tc in tool_calls:
+            name = getattr(tc, 'name', str(tc))
+            args = getattr(tc, 'arguments', {})
+            _console.print(
+                Panel(
+                    f"[bold]Tool:[/bold]  [magenta]{name}[/magenta]\n"
+                    f"[bold]Input:[/bold] [white]{args}[/white]",
+                    title="[yellow]🔧 Tool Used[/yellow]",
+                    border_style="yellow",
+                    padding=(0, 2),
+                )
+            )
+
+    # ── Observation: stdout from executing the generated code ─────────
+    obs = getattr(step_log, 'observations', None)
+    if obs and str(obs).strip():
+        _console.print(
+            Panel(
+                f"[green]{str(obs).strip()}[/green]",
+                title="[green]👁 Observation[/green]",
+                border_style="green",
+                padding=(0, 2),
+            )
+        )
+
+    # ── Error (if any) ────────────────────────────────────────────────
+    err = getattr(step_log, 'error', None)
+    if err:
+        _console.print(f"[bold red]⚠ Error:[/bold red] {err}")
+
+
+# ── 4. Build a CodeAgent instance ────────────────────────────────────
+
+def build_agent(task: str):
+    """
+    Create a fully configured CodeAgent for the given task.
+
+    Args:
+        task: The user's task string (used to select skills).
+
+    Returns:
+        CodeAgent: A ready-to-run agent instance.
+    """
+    from smolagents import CodeAgent, OpenAIServerModel
+
+    instructions = build_system_prompt(task)
+
+    # Connect to InferX-hosted model via OpenAI-compatible API
+    model = OpenAIServerModel(
+        model_id=config.MODEL_ID,
+        api_base=config.INFERX_ENDPOINT,
+        api_key=config.INFERX_API_KEY,
+    )
+
+    # Try to import project tools; fall back to empty list if not ready
+    try:
+        from tools import ALL_TOOLS
+        tools = ALL_TOOLS
+    except (ImportError, AttributeError):
+        print("⚠️  Tools not loaded — running agent with no tools")
+        tools = []
+
+    agent = CodeAgent(
+        tools=tools,
+        model=model,
+        instructions=instructions,
+        max_steps=config.MAX_STEPS,
+        step_callbacks=[_step_callback],
+    )
+
+    return agent
+
+
+# ── 4. Run the agent end-to-end ──────────────────────────────────────
+
+def run_agent(task: str) -> str:
+    """
+    Build an agent and execute the task in one call.
+
+    Args:
+        task: The user's task string.
+
+    Returns:
+        str: The agent's final result.
+    """
+    agent = build_agent(task)
+    result = agent.run(task)
+    return result
+
+
+# ── Self-test ────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    print("=" * 60)
+    print("TEST 1: load_master_prompt()")
+    print("=" * 60)
+    prompt = load_master_prompt()
+    print(f"  Length: {len(prompt)} chars")
+    print(f"  Preview: {prompt[:150]}...\n")
+
+    print("=" * 60)
+    print("TEST 2: build_system_prompt('search the web for news')")
+    print("=" * 60)
+    sp = build_system_prompt("search the web for news")
+    print(f"  Length: {len(sp)} chars")
+    print(f"  Contains skills: {'Relevant Skills' in sp}\n")
+
+    print("=" * 60)
+    print("TEST 3: build_agent('write a python script')")
+    print("=" * 60)
+    try:
+        ag = build_agent("write a python script")
+        print(f"  Agent type: {type(ag).__name__}")
+        print(f"  Max steps: {ag.max_steps}")
+        print(f"  Tools loaded: {len(ag.tools)}")
+    except Exception as e:
+        print(f"  ⚠️  Could not build agent (expected if no LLM): {e}")
+
+    print("\n" + "=" * 60)
+    print("TEST 4: run_agent (skipped — requires live LLM)")
+    print("=" * 60)
+    print("  Pass. (Would call run_agent in production.)")
