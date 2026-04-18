@@ -1,26 +1,33 @@
-from tools.file_tool import FileTool
+from tools.file_tool import (
+    write_file, 
+    create_excel_file, 
+    create_word_document
+)
 
-# Initialize the new FileTool
-tool = FileTool()
+# Test 1: Standard File Creation
+print("Testing writing text file...")
+out_txt = write_file("dummy.txt", "Hello from Synergy Agent!")
+print(f"Created: {out_txt}")
 
-# Test 1. Create a file
-tool.create_file("test_workspace.txt")
-print("1. File created.")
+# Test 2: Word Document Creation
+print("\nTesting creating a Word document...")
+out_word = create_word_document(
+    filename="report.docx", 
+    title="Synergy Agent Execution Report", 
+    paragraphs=["This is an automated file operations test.", "It works perfectly!"]
+)
+print(f"Created Word Document: {out_word}")
 
-# Test 2. Write and Read
-tool.write_file("test_workspace.txt", "Hello Synergy Agent, writing works!")
-content = tool.read_file("test_workspace.txt")
-print(f"2. File Content: {content}")
+# Test 3: Excel Creation
+print("\nTesting creating an Excel file...")
+out_xl = create_excel_file(
+    filename="syn3rgy_data.xlsx", 
+    headers=["ID", "Task Name", "Status"], 
+    rows=[
+        [1, "Initialize Agent", "Success"],
+        [2, "System Operations", "Success"]
+    ]
+)
+print(f"Created Excel File: {out_xl}")
 
-# Test 3. Rename and grab metadata
-tool.rename_file("test_workspace.txt", "test_workspace_renamed.txt")
-size = tool.get_file_size("test_workspace_renamed.txt")
-print(f"3. Renamed file size: {size} bytes")
-
-# Test 4. File Cleanup
-tool.delete_file("test_workspace_renamed.txt")
-print("4. File deleted.")
-
-print("\n--- Auditing & Tool History Log ---")
-for log in tool.get_history():
-    print(log)
+print("\nAll tasks passed!")
