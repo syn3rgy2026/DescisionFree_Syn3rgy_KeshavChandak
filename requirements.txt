@@ -1,0 +1,9 @@
+smolagents
+openai
+requests
+beautifulsoup4
+python-pptx
+browser-use
+playwright
+rich
+python-dotenv

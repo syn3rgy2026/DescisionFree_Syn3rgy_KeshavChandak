@@ -1,0 +1,40 @@
+# ── Python ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+
+# ── Virtual environments ─────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Environment / secrets ────────────────────────────────
+.env
+!.env.example
+
+# ── Output artefacts ─────────────────────────────────────
+output/*
+!output/.gitkeep
+
+# ── IDE / OS ─────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+
+# ── Playwright ───────────────────────────────────────────
+playwright/.auth/
+
+# ── Logs ─────────────────────────────────────────────────
+*.log
