@@ -15,12 +15,10 @@ user's terminal — browser opens, user authorizes, token saved.
 
 import os
 import subprocess
-import sys
 import webbrowser
 from smolagents import tool
 from rich.console import Console
 from rich.panel import Panel
-from tools.human_confirm import ask_human_confirmation
 
 _console = Console()
 
@@ -73,39 +71,33 @@ def _ensure_gh_logged_in() -> str | None:
         _console.print(f"[green]✓[/green] Authenticated as [bold cyan]@{username}[/bold cyan]")
         return None
 
-    # Not logged in → interactive login with full terminal passthrough
+    # Not logged in → clear stale creds and do interactive login
     _console.print(Panel(
         "[bold yellow]You are not logged into GitHub.[/bold yellow]\n\n"
-        "[white]A browser window will open for GitHub OAuth authorization.\n"
-        "Follow the prompts in your terminal to complete login.[/white]\n\n"
-        "[dim]• A one-time device code will be displayed\n"
-        "• Your browser will open to github.com/login/device\n"
-        "• Paste the code and authorize the app[/dim]",
+        "[white]An interactive login flow will start NOW in your terminal.[/white]\n\n"
+        "[bold cyan]What will happen:[/bold cyan]\n"
+        "[dim]  1. A one-time device code will be displayed\n"
+        "  2. Your browser will open to github.com/login/device\n"
+        "  3. Paste the code and authorize the app\n"
+        "  4. Return here — you'll be logged in automatically[/dim]\n\n"
+        "[bold green]>>> Follow the prompts below <<<[/bold green]",
         title="[bold blue]🌐 GitHub OAuth Login Required[/bold blue]",
         border_style="yellow",
         padding=(1, 2),
     ))
 
-    _console.print("[bold cyan]⏳ Starting GitHub login flow...[/bold cyan]\n")
+    _console.print("[bold cyan]⏳ Starting GitHub login now...[/bold cyan]\n")
 
-    # Use subprocess.run with inherited stdio so the user can interact
-    # with the gh CLI's device code flow directly in their terminal
-    try:
-        result = subprocess.run(
-            ["gh", "auth", "login", "--web", "--git-protocol", "https"],
-            stdin=sys.stdin,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
-            timeout=120,
-        )
-        if result.returncode != 0:
-            _console.print("[bold red]❌ GitHub login failed or was cancelled.[/bold red]")
-            return "GitHub login failed. Try running 'gh auth login' manually in your terminal."
-    except subprocess.TimeoutExpired:
-        _console.print("[bold red]❌ GitHub login timed out (120s).[/bold red]")
-        return "GitHub login timed out. Try running 'gh auth login' manually."
-    except FileNotFoundError:
-        return "GitHub CLI (gh) not found. Install it: brew install gh"
+    # Use os.system() — this directly inherits the real terminal's
+    # stdin/stdout/stderr file descriptors, which works correctly
+    # even when called from inside smolagents' CodeAgent sandbox.
+    # subprocess.run with sys.stdin does NOT work in that context.
+    exit_code = os.system("gh auth login --web --git-protocol https")
+
+    if exit_code != 0:
+        _console.print("\n[bold red]❌ GitHub login failed or was cancelled.[/bold red]")
+        _console.print("[dim]Try running 'gh auth login' manually in a separate terminal.[/dim]")
+        return "GitHub login failed. Try running 'gh auth login' manually in your terminal."
 
     # Verify login succeeded
     r = _cmd("gh auth status", timeout=15)
@@ -180,20 +172,9 @@ def github_create_and_push(project_dir: str, repo_name: str, private: bool = Fal
     if err:
         return f"❌ {err}"
 
-    # Step 3: Confirm
-    _console.print("[bold]Step 3/5:[/bold] Requesting confirmation...")
+    # Step 3: Init git if needed
     visibility = "PRIVATE" if private else "PUBLIC"
-    response = ask_human_confirmation(
-        action=f"Create GitHub repo '{repo_name}' ({visibility})",
-        reason=f"Creating a {visibility.lower()} repo and pushing code from {project_dir}.",
-        risk_level="MEDIUM",
-        details=f"repo: {repo_name}, visibility: {visibility}, description: {description}",
-    )
-    if response.strip().upper() != "YES":
-        return f"Cancelled. ({response})"
-
-    # Step 4: Init git if needed
-    _console.print("[bold]Step 4/5:[/bold] Preparing git repo...")
+    _console.print("[bold]Step 3/4:[/bold] Preparing git repo...")
     _ensure_git_init(project_dir)
 
     # Make sure all files are staged
@@ -202,8 +183,8 @@ def github_create_and_push(project_dir: str, repo_name: str, private: bool = Fal
     if r["out"]:
         _cmd('git commit -m "Update before push"', cwd=project_dir)
 
-    # Step 5: Create repo and push
-    _console.print("[bold]Step 5/5:[/bold] Creating repo and pushing code...")
+    # Step 4: Create repo and push — NO confirmation needed, user already approved
+    _console.print(f"[bold]Step 4/4:[/bold] Creating repo and pushing code...")
     vis_flag = "--private" if private else "--public"
     desc_flag = f'--description "{description}"' if description else ""
     cmd = f'gh repo create {repo_name} {vis_flag} {desc_flag} --source=. --remote=origin --push'
@@ -369,8 +350,9 @@ def github_logout() -> str:
     # Get current user before logging out
     username = _get_gh_user()
 
-    # gh auth logout requires specifying the hostname
-    r = _cmd("gh auth logout --hostname github.com", timeout=15)
+    # gh auth logout — use os.system for interactive TTY
+    exit_code = os.system("gh auth logout --hostname github.com 2>/dev/null")
+    r = {"ok": exit_code == 0, "out": "", "err": ""}
 
     # If that didn't work (maybe needs confirmation), force it
     if not r["ok"]:

@@ -1,32 +1,20 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Simple Todo App</title>
-    <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; padding: 50px; }
-        .container { width: 300px; }
-        ul { list-style: none; padding: 0; }
-        li { padding: 8px; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; cursor: pointer; }
-        .done { text-decoration: line-through; color: gray; }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synergy Todo App</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="container">
-        <h1>Todo List</h1>
-        <input type="text" id="todoInput" placeholder="Add a task...">
-        <button onclick="addTask()">Add</button>
-        <ul id="todoList"></ul>
+        <h1>My Todo List</h1>
+        <div class="input-group">
+            <input type="text" id="todo-input" placeholder="Add a new task...">
+            <button id="add-btn">Add</button>
+        </div>
+        <ul id="todo-list"></ul>
     </div>
-    <script>
-        function addTask() {
-            const input = document.getElementById('todoInput');
-            if (!input.value) return;
-            const li = document.createElement('li');
-            li.innerHTML = `${input.value} <button onclick="event.stopPropagation(); this.parentElement.remove()">X</button>`;
-            li.onclick = () => li.classList.toggle('done');
-            document.getElementById('todoList').appendChild(li);
-            input.value = '';
-        }
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
