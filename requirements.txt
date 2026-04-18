@@ -6,3 +6,5 @@ requests
 beautifulsoup4
 playwright
 python-pptx
+chromadb
+sentence-transformers

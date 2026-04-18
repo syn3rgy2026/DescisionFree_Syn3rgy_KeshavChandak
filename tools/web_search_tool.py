@@ -6,7 +6,7 @@ Provides web search capabilities using DuckDuckGo (no API key required).
 Returns titles, URLs, and snippets for search results.
 """
 
-from ddgs import DDGS
+from duckduckgo_search import DDGS
 from smolagents import tool
 
 

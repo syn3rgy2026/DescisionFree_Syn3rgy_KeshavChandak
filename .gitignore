@@ -37,5 +37,12 @@ Thumbs.db
 # ── Playwright ───────────────────────────────────────────
 playwright/.auth/
 
+# ── Agent memory data ───────────────────────────────────
+memory/data/*.db
+memory/data/*.sqlite
+memory/data/*.sqlite3
+memory/data/chroma/
+.agent/
+
 # ── Logs ─────────────────────────────────────────────────
 *.log
