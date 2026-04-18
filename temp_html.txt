@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic Tac Toe</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f0f2f5;">
+    <div style="text-align: center;">
+        <h1>Tic Tac Toe</h1>
+        <div id="status" style="margin-bottom: 20px; font-size: 1.2rem; font-weight: bold;">Player X's Turn</div>
+        <div id="board" style="display: grid; grid-template-columns: repeat(3, 100px); gap: 10px; margin-bottom: 20px; justify-content: center;">
+            <div class="cell" data-index="0" style="width: 100px; height: 100px; background: white; border: 2px solid #333; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; cursor: pointer;"></div>
+            <div class="cell" data-index="1" style="width: 100px; height: 100px; background: white; border: 2px solid #333; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; cursor: pointer;"></div>
+            <div class="cell" data-index="2" style="width: 100px; height: 100px; background: white; border: 2px solid #333; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; cursor: pointer;"></div>
+            <div class="cell" data-index="3" style="width: 100px; height: 100px; background: white; border: 2px solid #333; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; cursor: pointer;"></div>
+            <div class="cell" data-index="4" style="width: 100px; height: 100px; background: white; border: 2px solid #333; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; cursor: pointer;"></div>
+            <div class="cell" data-index="5" style="width: 100px; height: 100px; background: white; border: 2px solid #333; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; cursor: pointer;"></div>
+            <div class="cell" data-index="6" style="width: 100px; height: 100px; background: white; border: 2px solid #333; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; cursor: pointer;"></div>
+            <div class="cell" data-index="7" style="width: 100px; height: 100px; background: white; border: 2px solid #333; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; cursor: pointer;"></div>
+            <div class="cell" data-index="8" style="width: 100px; height: 100px; background: white; border: 2px solid #333; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; cursor: pointer;"></div>
+        </div>
+        <button id="reset" style="padding: 10px 20px; cursor: pointer;">Reset Game</button>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
