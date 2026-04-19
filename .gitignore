@@ -23,6 +23,7 @@ ENV/
 tools/email_creds.txt
 credentials.json
 token.json
+*.localbak
 
 # ── Output artefacts ─────────────────────────────────────
 output/*
@@ -38,6 +39,9 @@ Thumbs.db
 
 # ── Playwright ───────────────────────────────────────────
 playwright/.auth/
+
+# ── Legacy / local databases (not used by current memory layout) ─────
+chroma_db/
 
 # ── Agent memory data ───────────────────────────────────
 memory/data/*.db
