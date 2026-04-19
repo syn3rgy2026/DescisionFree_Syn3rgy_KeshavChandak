@@ -60,6 +60,11 @@ def get_skills_for_task(task: str) -> str:
         "ppt_skill.md":    ["ppt", "slides", "powerpoint", "presentation", "slide", "deck"],
         "deploy_skill.md": ["deploy", "vercel", "github", "push", "repo", "host", "launch", "publish", "git"],
         "social_media_skill.md": ["instagram", "linkedin", "post", "social media", "caption", "marketing", "story"],
+        "google_workspace_skill.md": [
+            "google", "calendar", "meet", "sheets", "spreadsheet",
+            "docs", "document", "drive", "schedule", "meeting",
+            "invite", "attendee", "attendees",
+        ],
     }
 
     already_loaded: set[str] = set()

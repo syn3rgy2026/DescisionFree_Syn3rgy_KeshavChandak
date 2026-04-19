@@ -95,6 +95,14 @@ except Exception as _e:
     print(f"⚠️  PPT tools failed to load: {_e}", file=sys.stderr)
     PPT_TOOLS = []
 
+
+
+# ── Google Workspace tools ────────────────────────────────────────────
+try:
+    from tools.google_workspace_tool import GOOGLE_WORKSPACE_TOOLS
+except Exception as _e:
+    print(f"⚠️  Google Workspace tools failed to load: {_e}", file=sys.stderr)
+    GOOGLE_WORKSPACE_TOOLS = []
 # ── Live data tools (cricket, weather, stocks, crypto, news, fx) ──────
 try:
     from tools.live_data_tools import LIVE_DATA_TOOLS
@@ -116,6 +124,7 @@ ALL_TOOLS = (
     + INSTAGRAM_TOOLS
     + LINKEDIN_TOOLS
     + PPT_TOOLS
+    + GOOGLE_WORKSPACE_TOOLS
     + HUMAN_CONFIRM_TOOLS
     + LIVE_DATA_TOOLS
 )

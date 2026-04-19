@@ -173,6 +173,14 @@ def build_agent(task: str):
         instructions=instructions,
         max_steps=config.MAX_STEPS,
         step_callbacks=[_step_callback],
+        additional_authorized_imports=[
+            "google", "google.oauth2", "google.oauth2.credentials",
+            "google.auth", "google.auth.transport", "google.auth.transport.requests",
+            "google_auth_oauthlib", "google_auth_oauthlib.flow",
+            "googleapiclient", "googleapiclient.discovery", "googleapiclient.http",
+            "json", "os", "base64", "mimetypes", "datetime", "time",
+            "email", "email.mime", "email.mime.text", "email.mime.multipart",
+        ],
     )
 
     return agent
