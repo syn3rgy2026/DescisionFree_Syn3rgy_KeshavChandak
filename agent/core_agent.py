@@ -180,6 +180,9 @@ def build_agent(task: str):
             "googleapiclient", "googleapiclient.discovery", "googleapiclient.http",
             "json", "os", "base64", "mimetypes", "datetime", "time",
             "email", "email.mime", "email.mime.text", "email.mime.multipart",
+            "matplotlib", "matplotlib.pyplot", "matplotlib.ticker",
+            "PIL", "PIL.Image", "PIL.ImageDraw", "PIL.ImageFont",
+            "requests", "hashlib", "textwrap", "io", "dotenv",
         ],
     )
 
