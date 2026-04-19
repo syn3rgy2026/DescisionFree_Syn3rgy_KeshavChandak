@@ -8,6 +8,8 @@ Clean, functional UI with a three-column layout:
 
 Aura: Professional, deep charcoal dark mode with blue accents.
 Focus: The agent's thought process is central. The execution plan is a flowchart.
+
+Drag-and-drop: drop files from Finder onto the terminal input to attach them.
 """
 
 from __future__ import annotations
@@ -28,6 +30,8 @@ from textual.reactive import reactive
 from textual.widget import Widget
 from rich.text import Text
 from rich.style import Style
+
+from ui.file_context import extract_paths, build_augmented_task
 
 
 # ═══════════════════════════════════════════════════════════
@@ -120,6 +124,26 @@ def _human_label(tool_name: str, code: str = "") -> str:
 # ═══════════════════════════════════════════════════════════
 # Custom Widgets
 # ═══════════════════════════════════════════════════════════
+
+
+class AttachedFilesBar(Static):
+    """Shows attached file names when the user drags files onto the input."""
+
+    attached: reactive[list] = reactive(list, always_update=True)
+
+    def render(self) -> Text:
+        files = self.attached
+        if not files:
+            return Text("")
+        names = [Path(p).name for p in files]
+        t = Text()
+        t.append(" 📎 ", style=f"bold {ACCENT}")
+        t.append(f"{len(files)} file{'s' if len(files) > 1 else ''} attached: ", style=WHITE)
+        t.append(", ".join(names[:5]), style=ACCENT)
+        if len(names) > 5:
+            t.append(f" +{len(names) - 5} more", style=DIM)
+        t.append("   /clear-files to remove", style=DIM)
+        return t
 
 
 class AgentHeader(Static):
@@ -366,6 +390,7 @@ class SynergyAgentApp(App):
     _timer_handle = None
     agent_busy: bool = False
     _awaiting_confirmation: bool = False  # True while waiting for human YES/NO
+    _attached_files: list[str] = []       # Paths from drag-and-drop
 
     def compose(self) -> ComposeResult:
         yield AgentHeader(id="agent-header")
@@ -394,8 +419,9 @@ class SynergyAgentApp(App):
                 yield Static(" Findings ", id="findings-title")
                 yield DataTable(id="findings-panel")
 
-        yield Static("  Enter task · /clear reset · /exit quit ", id="input-hint")
-        yield Input(placeholder="Describe what you want the agent to do…", id="agent-input")
+        yield AttachedFilesBar(id="attached-files-bar")
+        yield Static("  Enter task · /clear reset · /exit quit · drag files to attach ", id="input-hint")
+        yield Input(placeholder="Describe what you want the agent to do… (drag files here)", id="agent-input")
 
     def on_mount(self) -> None:
         # Register this app as the TUI bridge for human confirmation prompts
@@ -535,7 +561,62 @@ class SynergyAgentApp(App):
         inp.placeholder = "🛑 Type YES to approve, NO to cancel, or alternative instructions…"
         inp.focus()
 
+    # ── File attachment helpers ─────────────────────────────────
+
+    def _detect_and_attach(self, text: str) -> None:
+        """Scan text for file paths and update the attachment bar."""
+        paths = extract_paths(text)
+        # Merge with existing (don't replace — user may paste multiple times)
+        merged: list[str] = list(self._attached_files)
+        for p in paths:
+            if p not in merged:
+                merged.append(p)
+        if merged != self._attached_files:
+            self._attached_files = merged
+            bar = self.query_one("#attached-files-bar", AttachedFilesBar)
+            bar.attached = list(merged)
+            if merged:
+                self.set_insight(
+                    f"📎 {len(merged)} file(s) attached — type your task and press Enter.",
+                    "accent",
+                )
+
+    def _clear_attachments(self) -> None:
+        """Remove all attached files."""
+        self._attached_files = []
+        try:
+            self.query_one("#attached-files-bar", AttachedFilesBar).attached = []
+        except Exception:
+            pass
+
     # ── Interaction ─────────────────────────────────────
+
+    def on_paste(self, event) -> None:
+        """Catch paste events (including drag-and-drop from Finder).
+
+        When a user drags a file onto a terminal, the terminal pastes the
+        absolute path as text.  Textual fires an on_paste event for this.
+        We intercept it here to immediately detect file paths.
+        """
+        if self._awaiting_confirmation:
+            return
+        pasted = getattr(event, "text", "") or ""
+        if pasted:
+            self._detect_and_attach(pasted)
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Fallback: also check the full input value on changes.
+
+        We debounce filesystem checks to avoid lag on every keystroke:
+        only run detection if the input contains a '/' or '~/' prefix.
+        """
+        if self._awaiting_confirmation:
+            return
+        val = event.value
+        # Quick pre-check: only run expensive path detection if the input
+        # looks like it might contain a path
+        if "/" in val or val.startswith("~"):
+            self._detect_and_attach(val)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         task = event.value.strip()
@@ -546,7 +627,7 @@ class SynergyAgentApp(App):
         if self._awaiting_confirmation:
             self._awaiting_confirmation = False
             inp = self.query_one("#agent-input", Input)
-            inp.placeholder = "Describe what you want the agent to do…"
+            inp.placeholder = "Describe what you want the agent to do… (drag files here)"
             self.log_thinking(f"Confirmation response: {task}")
             self.set_insight("Confirmation received — agent resuming…", "accent")
             from tools.human_confirm import _submit_tui_response
@@ -555,16 +636,38 @@ class SynergyAgentApp(App):
 
         if task.lower() == "/exit": self.exit()
         elif task.lower() == "/clear": self.clear_workspace()
+        elif task.lower() == "/clear-files":
+            self._clear_attachments()
+            self.set_insight("Attached files cleared.", "ok")
         elif self.agent_busy:
             self.set_insight("Another run is in progress — wait for it to finish or use /clear.", "warn")
             self.log_thinking("Input ignored while the agent is busy. Use /clear to reset the workspace.")
         else:
+            # Build augmented task if files are attached
+            attached = list(self._attached_files)
+            # Also detect any new paths directly in the submit text (final check)
+            inline_paths = extract_paths(task)
+            all_paths = list(dict.fromkeys(attached + inline_paths))  # dedupe, order preserved
+
+            if all_paths:
+                augmented_task, display_task = build_augmented_task(task, all_paths)
+                file_names = ", ".join(Path(p).name for p in all_paths)
+                self.log_thinking(
+                    f"Attached files\n"
+                    f"📎 {len(all_paths)} file(s): {file_names}\n"
+                    f"Contents injected into task context for the agent."
+                )
+            else:
+                augmented_task = task
+                display_task = task
+
+            self._clear_attachments()
             self.agent_busy = True
             self.clear_workspace()
-            self.set_task(task)
+            self.set_task(display_task)
             self.set_insight("Running — building execution flow from live tool steps…", "accent")
             self.set_plan([("Starting…", "active", "Model load & parse")])
-            self.run_worker(lambda: self._run_agent(task), thread=True)
+            self.run_worker(lambda: self._run_agent(augmented_task), thread=True)
 
     def clear_workspace(self) -> None:
         self.query_one("#steps-feed", ScrollableContainer).remove_children()
@@ -579,6 +682,7 @@ class SynergyAgentApp(App):
         self.query_one("#agent-header", AgentHeader).steps = 0
         self.query_one("#session-insight", SessionInsight).message = ""
         self.query_one("#session-insight", SessionInsight).tone = "dim"
+        self._clear_attachments()
         self.start_time = time.time()
 
     def _run_agent(self, task: str) -> None:

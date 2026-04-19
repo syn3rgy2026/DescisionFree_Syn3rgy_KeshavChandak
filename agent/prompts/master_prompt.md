@@ -82,6 +82,18 @@ The system prompt includes **concrete paths** for this machine (cwd, default `ou
 
 ---
 
+### Rule 4c: Attached Files (Drag & Drop)
+
+The user may attach files by dragging them onto the terminal input. When files are attached, you will see an `<attached_files>` block at the beginning of the task with the file contents already loaded.
+
+**Rules for attached files:**
+- **Use the content directly** — do NOT re-read the file with `read_file` unless you need to re-check after editing it.
+- The paths listed inside `[File: /absolute/path]` are **absolute and valid** on this machine.
+- If a file is marked `[Binary file: ...]`, you cannot see its content but can still operate on it using tools (e.g., shell commands, `read_file` for supported formats).
+- If content is `(truncated)`, use `read_file` to get the full content if needed.
+
+---
+
 ### Rule 5: Ask Before Risky Actions
 
 Before performing any action that could be **destructive, irreversible, or expensive**, you **must** call the `ask_human_confirmation` tool and wait for explicit approval.

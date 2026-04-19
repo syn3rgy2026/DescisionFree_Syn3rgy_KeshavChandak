@@ -117,6 +117,16 @@ StepWidget.error {
     border-left: outer #d29922;
 }
 
+#attached-files-bar {
+    dock: bottom;
+    height: auto;
+    max-height: 2;
+    background: #111923;
+    color: #c9d1d9;
+    padding: 0 2;
+    border-top: solid #21262d;
+}
+
 #input-hint {
     dock: bottom;
     height: 1;
