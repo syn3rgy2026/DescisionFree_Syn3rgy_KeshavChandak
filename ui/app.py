@@ -365,6 +365,7 @@ class SynergyAgentApp(App):
     _seen_contexts: set = set()
     _timer_handle = None
     agent_busy: bool = False
+    _awaiting_confirmation: bool = False  # True while waiting for human YES/NO
 
     def compose(self) -> ComposeResult:
         yield AgentHeader(id="agent-header")
@@ -397,6 +398,10 @@ class SynergyAgentApp(App):
         yield Input(placeholder="Describe what you want the agent to do…", id="agent-input")
 
     def on_mount(self) -> None:
+        # Register this app as the TUI bridge for human confirmation prompts
+        from tools.human_confirm import set_tui_app
+        set_tui_app(self)
+
         self.query_one("#findings-panel", DataTable).add_columns("Item", "Status")
         self.query_one("#activity-panel", RichLog).write(
             Text("Stand by for a task. You will see plans, tool steps, failures, and recoveries here in real time.", style=DIM)
@@ -513,13 +518,41 @@ class SynergyAgentApp(App):
             pct = int((completed / config.MAX_STEPS) * 100) if config.MAX_STEPS else 0
             bar.update(total=100, progress=min(pct, 95))
 
+    # ── Human confirmation bridge ────────────────────────
+
+    def request_human_confirmation(self, message: str) -> None:
+        """Called from the worker thread (via call_from_thread) to show a
+        confirmation prompt in the TUI input bar."""
+        self._awaiting_confirmation = True
+        log = self.query_one("#activity-panel", RichLog)
+        log.write(Text("\n🛑 HUMAN CONFIRMATION REQUIRED", style=f"bold {RED}"))
+        for line in message.splitlines():
+            log.write(Text(f"   {line}", style=AMBER))
+        log.write(Text("   Type YES to approve, NO to cancel, or alternative instructions.", style=DIM))
+        log.write(Text(" · " * 28, style="#21262d"))
+        self.set_insight("⏸ Awaiting your confirmation — type YES / NO in the input bar below.", "warn")
+        inp = self.query_one("#agent-input", Input)
+        inp.placeholder = "🛑 Type YES to approve, NO to cancel, or alternative instructions…"
+        inp.focus()
+
     # ── Interaction ─────────────────────────────────────
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         task = event.value.strip()
         if not task: return
         event.input.value = ""
-        
+
+        # If we're waiting for a human confirmation, route the response back
+        if self._awaiting_confirmation:
+            self._awaiting_confirmation = False
+            inp = self.query_one("#agent-input", Input)
+            inp.placeholder = "Describe what you want the agent to do…"
+            self.log_thinking(f"Confirmation response: {task}")
+            self.set_insight("Confirmation received — agent resuming…", "accent")
+            from tools.human_confirm import _submit_tui_response
+            _submit_tui_response(task)
+            return
+
         if task.lower() == "/exit": self.exit()
         elif task.lower() == "/clear": self.clear_workspace()
         elif self.agent_busy:
@@ -640,3 +673,9 @@ class SynergyAgentApp(App):
         log.write(Text(f"\n ERROR: {err}", style=f"bold {RED}"))
         self.set_insight("Run stopped — check the error above and try again or rephrase the task.", "warn")
         self.agent_busy = False
+
+    def action_quit(self) -> None:
+        """Clean up the TUI bridge before quitting."""
+        from tools.human_confirm import clear_tui_app
+        clear_tui_app()
+        super().action_quit()

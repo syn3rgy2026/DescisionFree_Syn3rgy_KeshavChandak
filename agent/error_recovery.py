@@ -58,6 +58,15 @@ def run_with_recovery(run_fn, task: str, max_attempts: int = 3):
                 )
 
     # ── All attempts exhausted — ask the user ────────────────────────
+    # In TUI mode, console.input() would block forever, so auto-return failure.
+    try:
+        from tools.human_confirm import _tui_app
+        if _tui_app is not None:
+            summary = f"Task failed after {max_attempts} attempts. Last error: {last_error}"
+            return summary, False
+    except ImportError:
+        pass
+
     # Use high-contrast prompt for the recovery question
     while True:
         choice = console.input(
