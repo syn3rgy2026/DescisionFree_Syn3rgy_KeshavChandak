@@ -86,7 +86,19 @@ def _setup_credentials() -> tuple[str, str]:
       - Opens Google's App Password page in the browser.
       - Prompts the user to enter their Gmail + App Password.
       - Saves and returns the credentials.
+
+    In TUI mode the interactive prompts would block forever, so we raise
+    an error and tell the user to set up credentials outside the TUI.
     """
+    # Check if we're running inside the Textual TUI
+    from tools.human_confirm import _tui_app
+    if _tui_app is not None:
+        raise RuntimeError(
+            "Email credentials not found. Please run the email tool once "
+            "from a normal terminal (python -c \"from tools.email_tool import send_email\") "
+            "to complete the first-time Gmail setup, then retry in the TUI."
+        )
+
     console.print(Panel(
         "[bold white]First-time email setup[/bold white]\n\n"
         "Gmail requires an [bold cyan]App Password[/bold cyan] for third-party apps.\n"
@@ -115,6 +127,7 @@ def _setup_credentials() -> tuple[str, str]:
 
     _save_credentials(email, password)
     return email, password
+
 
 
 def _get_credentials() -> tuple[str, str]:

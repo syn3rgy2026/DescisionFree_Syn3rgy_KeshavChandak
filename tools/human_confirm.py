@@ -8,17 +8,62 @@ destructive shell command, sending an email, deleting files).
 
 Uses rich for a clearly-formatted confirmation prompt.
 
+TUI-aware: when the Textual TUI is active, the prompt is routed to the
+TUI input bar instead of stdin (which Textual has captured).
+
 Public API (smolagents @tool):
     ask_human_confirmation(action, reason, risk_level, details="")
 """
 
 import json
+import threading
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt
 from smolagents import tool
 
 console = Console()
+
+# ── TUI bridge ────────────────────────────────────────────────────────
+# When the Textual app is running it sets _tui_app to itself.
+# The worker thread calling ask_human_confirmation checks this and,
+# if set, posts the confirmation prompt to the TUI input bar instead
+# of trying Prompt.ask (which would block forever).
+
+_tui_app = None          # set by ui/app.py on_mount, cleared on exit
+_tui_response = None     # str: the user's response text
+_tui_event = threading.Event()  # signalled when the user responds
+
+
+def set_tui_app(app):
+    """Called by Textual app on mount to enable TUI-mode prompts."""
+    global _tui_app
+    _tui_app = app
+
+
+def clear_tui_app():
+    """Called by Textual app on exit to disable TUI-mode prompts."""
+    global _tui_app
+    _tui_app = None
+
+
+def _submit_tui_response(response: str):
+    """Called by the Textual app when the user types an answer."""
+    global _tui_response
+    _tui_response = response
+    _tui_event.set()
+
+
+def _ask_via_tui(message: str) -> str:
+    """Block the worker thread until the user answers in the TUI."""
+    global _tui_response
+    _tui_event.clear()
+    _tui_response = None
+    # Post the confirmation request to the TUI event loop
+    _tui_app.call_from_thread(_tui_app.request_human_confirmation, message)
+    # Wait for the user to type a response (no timeout — the user decides)
+    _tui_event.wait()
+    return _tui_response or ""
 
 
 @tool
@@ -45,14 +90,34 @@ def ask_human_confirmation(action: str, reason: str, risk_level: str, details: s
         risk_level.upper(), "green"
     )
 
-    # --- Build the panel body ---
+    # --- Build the confirmation text ---
+    lines = [
+        f"Action: {action}",
+        f"Reason: {reason}",
+        f"Risk:   {risk_level.upper()}",
+    ]
+
+    if details and details.strip():
+        try:
+            detail_dict = json.loads(details)
+            for k, v in detail_dict.items():
+                lines.append(f"  {k}: {v}")
+        except json.JSONDecodeError:
+            lines.append(f"Details: {details}")
+
+    summary = "\n".join(lines)
+
+    # ── TUI mode: route to Textual input bar ─────────────────────────
+    if _tui_app is not None:
+        return _ask_via_tui(summary)
+
+    # ── CLI mode: original Rich prompt ───────────────────────────────
     content = (
         f"[bold white]Action:[/bold white] {action}\n"
         f"[bold white]Reason:[/bold white] {reason}\n"
         f"[bold white]Risk:[/bold white]   [{risk_color}]{risk_level.upper()}[/{risk_color}]"
     )
 
-    # If the caller supplied extra details, parse and append them
     if details and details.strip():
         try:
             detail_dict = json.loads(details)
@@ -61,10 +126,8 @@ def ask_human_confirmation(action: str, reason: str, risk_level: str, details: s
             )
             content += f"\n\n[bold white]Details:[/bold white]\n{detail_lines}"
         except json.JSONDecodeError:
-            # If it's not valid JSON, just append it as plain text
             content += f"\n\n[bold white]Details:[/bold white] {details}"
 
-    # --- Render the panel ---
     panel = Panel(
         content,
         title="[bold red]🛑 HUMAN CONFIRMATION REQUIRED 🛑[/bold red]",
