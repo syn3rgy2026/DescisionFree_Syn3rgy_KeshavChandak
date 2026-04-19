@@ -65,6 +65,11 @@ def get_skills_for_task(task: str) -> str:
             "ui", "design", "poster", "component", "layout", "web app", "page",
             "beautify", "style", "react", "vue", "portfolio", "banner",
         ],
+        "google_workspace_skill.md": [
+            "google", "calendar", "meet", "sheets", "spreadsheet",
+            "docs", "document", "drive", "schedule", "meeting",
+            "invite", "attendee", "attendees",
+        ],
     }
 
     already_loaded: set[str] = set()

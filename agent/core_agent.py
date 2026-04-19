@@ -6,21 +6,22 @@ Central orchestrator for Synergy Agent.
 Provides:
   1. load_master_prompt   — read master_prompt.md
   2. build_system_prompt  — combine master prompt + skill context + memory
-  3. build_agent          — create a ready-to-use CodeAgent (no UI coupling)
+  3. build_agent          — create a ready-to-use CodeAgent (optional Textual callbacks)
+  4. run_agent            — build + run + memory log (CLI / scripts)
 """
 
 import os
 from pathlib import Path
 from rich.console import Console
+from rich.panel import Panel
+from rich.rule import Rule
 import config
 from agent.skill_router import get_skills_for_task
 from memory.memory_manager import get_memory_manager
 
 _console = Console()
-_memory = get_memory_manager()  # singleton — shared across all tasks in the session
+_memory = get_memory_manager()
 
-
-# ── 1. Load the master prompt ─────────────────────────────────────────
 
 def load_master_prompt() -> str:
     """
@@ -41,8 +42,6 @@ def load_master_prompt() -> str:
         return f.read()
 
 
-# ── 2. Build the full system prompt ──────────────────────────────────
-
 def build_system_prompt(task: str) -> str:
     """
     Combine the master prompt with skill context + memory context.
@@ -60,15 +59,13 @@ def build_system_prompt(task: str) -> str:
     if skills:
         system_prompt += "\n\n# Relevant Skills & Instructions\n\n" + skills
 
-    # Inject past memory context so agent can learn from history
     try:
         memory_ctx = _memory.build_memory_context(task)
         if memory_ctx:
             system_prompt += "\n\n# Memory Context (from past sessions)\n\n" + memory_ctx
-    except Exception:
-        pass
+    except Exception as e:
+        _console.print(f"[dim]⚠️ Memory context load failed: {e}[/dim]")
 
-    # Where files may go on this machine (so "save on Desktop" is not ignored)
     try:
         cwd = str(Path.cwd().resolve())
         home = str(Path.home().resolve())
@@ -93,7 +90,89 @@ def build_system_prompt(task: str) -> str:
     return system_prompt
 
 
-# ── 3. Build a CodeAgent instance ────────────────────────────────────
+def _step_callback(step_log) -> None:
+    """Rich console trace for each agent step when no UI callbacks are passed."""
+    step_num = getattr(step_log, "step_number", "?")
+    _console.print(Rule(f"[bold blue]Step {step_num}[/bold blue]", style="blue"))
+
+    model_output = getattr(step_log, "model_output", None)
+    if model_output:
+        _console.print(
+            Panel(
+                f"[cyan]{str(model_output).strip()}[/cyan]",
+                title="[blue]💭 Thought / Code[/blue]",
+                border_style="blue",
+                padding=(0, 2),
+            )
+        )
+
+    tool_calls = getattr(step_log, "tool_calls", None)
+    if tool_calls:
+        for tc in tool_calls:
+            name = getattr(tc, "name", str(tc))
+            args = getattr(tc, "arguments", {})
+            _console.print(
+                Panel(
+                    f"[bold]Tool:[/bold]  [magenta]{name}[/magenta]\n"
+                    f"[bold]Input:[/bold] [white]{args}[/white]",
+                    title="[yellow]🔧 Tool Used[/yellow]",
+                    border_style="yellow",
+                    padding=(0, 2),
+                )
+            )
+
+    obs = getattr(step_log, "observations", None)
+    if obs and str(obs).strip():
+        _console.print(
+            Panel(
+                f"[green]{str(obs).strip()}[/green]",
+                title="[green]👁 Observation[/green]",
+                border_style="green",
+                padding=(0, 2),
+            )
+        )
+
+    err = getattr(step_log, "error", None)
+    if err:
+        _console.print(f"[bold red]⚠ Error:[/bold red] {err}")
+
+
+_GOOGLE_AND_CHART_IMPORTS = [
+    "google",
+    "google.oauth2",
+    "google.oauth2.credentials",
+    "google.auth",
+    "google.auth.transport",
+    "google.auth.transport.requests",
+    "google_auth_oauthlib",
+    "google_auth_oauthlib.flow",
+    "googleapiclient",
+    "googleapiclient.discovery",
+    "googleapiclient.http",
+    "json",
+    "os",
+    "base64",
+    "mimetypes",
+    "datetime",
+    "time",
+    "email",
+    "email.mime",
+    "email.mime.text",
+    "email.mime.multipart",
+    "matplotlib",
+    "matplotlib.pyplot",
+    "matplotlib.ticker",
+    "PIL",
+    "PIL.Image",
+    "PIL.ImageDraw",
+    "PIL.ImageFont",
+    "requests",
+    "hashlib",
+    "textwrap",
+    "io",
+    "dotenv",
+]
+
 
 def build_agent(task: str, step_callbacks=None):
     """
@@ -101,8 +180,8 @@ def build_agent(task: str, step_callbacks=None):
 
     Args:
         task:           The user's task string (used to select skills).
-        step_callbacks: Optional list of callbacks. If None, no callbacks
-                        are attached. The Textual TUI passes its own.
+        step_callbacks: Optional list of callbacks (e.g. Textual TUI). If None,
+                        uses the Rich console step callback.
 
     Returns:
         CodeAgent: A ready-to-run agent instance.
@@ -111,32 +190,63 @@ def build_agent(task: str, step_callbacks=None):
 
     instructions = build_system_prompt(task)
 
-    # Connect to InferX-hosted model via OpenAI-compatible API
     model = OpenAIServerModel(
         model_id=config.MODEL_ID,
         api_base=config.INFERX_ENDPOINT,
         api_key=config.INFERX_API_KEY,
     )
 
-    # Try to import project tools; fall back to empty list if not ready
     try:
         from tools import ALL_TOOLS
+
         tools = ALL_TOOLS
     except (ImportError, AttributeError):
         tools = []
+
+    cbs = list(step_callbacks) if step_callbacks else [_step_callback]
 
     agent = CodeAgent(
         tools=tools,
         model=model,
         instructions=instructions,
         max_steps=config.MAX_STEPS,
-        step_callbacks=step_callbacks or [],
+        step_callbacks=cbs,
+        additional_authorized_imports=_GOOGLE_AND_CHART_IMPORTS,
     )
 
     return agent
 
 
-# ── Self-test ────────────────────────────────────────────────────────
+def run_agent(task: str) -> str:
+    """
+    Build an agent and execute the task in one call.
+    Logs outcome to persistent memory.
+    """
+    agent = build_agent(task)
+
+    try:
+        result = agent.run(task)
+        try:
+            _memory.log_task(task=task, result=str(result), status="completed")
+            _console.print("[dim]💾 Task result saved to memory.[/dim]")
+        except Exception as e:
+            _console.print(f"[dim]⚠️ Failed to save to memory: {e}[/dim]")
+        return result
+
+    except Exception as exc:
+        try:
+            _memory.log_task(
+                task=task,
+                result=str(exc),
+                status="error",
+                errors=str(exc),
+            )
+            _console.print("[dim]💾 Task failure saved to memory (will avoid next time).[/dim]")
+        except Exception:
+            pass
+        raise
+
+
 if __name__ == "__main__":
     _console.print("=" * 60)
     _console.print("TEST 1: load_master_prompt()")

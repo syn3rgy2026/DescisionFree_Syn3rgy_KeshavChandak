@@ -1,599 +1,236 @@
-# PowerPoint Skill — SYNERGY AGENT
+# PowerPoint Skill — Industry-Grade Presentations
 
-> *Owner:* Person 3
+> **Owner:** Person 3
 
----
+## Description
 
-## When This Skill Is Active
+This skill enables the agent to create **consulting-grade, visually rich**
+PowerPoint presentations with charts, diagrams, images, and professional
+layouts. Every deck should tell a story with visuals — not just text.
 
-This skill is loaded when the task involves:
-- Creating presentations, PPTs, slides, or decks
-- Pitch decks for hackathons or startups
-- Business proposals or reports
-- Academic presentations
-- Keywords: "presentation", "ppt", "slides", "deck", "powerpoint"
+**IMPORTANT:** The following tools are REGISTERED and AVAILABLE in the runtime.
+They are real, callable functions — DO NOT say they are unavailable. Call them directly.
 
----
+## Available Tools (all registered, all callable)
 
-## Available Tools
+### Primary Tool
+- **`create_presentation(filename, title, slides_data, theme, subtitle, author)`**
+  Creates a complete multi-slide deck with professional design. Supports: bullet,
+  section, text, comparison, image, chart, diagram slide types.
 
-You have access to these PPT tools:
+### Visual Generation Tools
+- **`generate_chart_image(data, chart_type, filename, title, xlabel, ylabel, theme)`**
+  Generate bar/line/pie/horizontal_bar charts with matplotlib. Returns image path.
+- **`generate_diagram_image(diagram_type, content, filename, theme)`**
+  Generate flowcharts, architecture diagrams, and pipelines. Returns image path.
+- **`fetch_relevant_image(query, filename)`**
+  Fetch stock photos from the web. Returns image path.
 
-1. *create_presentation()* - Main tool for multi-slide presentations
-2. *create_quick_ppt()* - Fast 3-slide presentations
-3. *add_slide_to_ppt()* - Add slides to existing presentations
-4. *list_ppt_themes()* - See available themes
+### Design Enhancement Tools
+- **`enhance_slide_design(filepath, theme)`**
+  Apply professional design elements to an existing presentation.
+- **`insert_visual_element(filepath, image_path, slide_index, layout_type)`**
+  Insert images/charts/diagrams at smart positions on existing slides.
 
-You also have *browser* tool for image acquisition.
+### Helper Tools
+- **`create_quick_ppt(filename, title, bullet_points, theme)`**
+  Fast 3-slide deck (title, bullets, thank-you). Use for simple requests.
+- **`add_slide_to_ppt(filepath, slide_type, heading, content)`**
+  Append a slide to an existing .pptx file.
+- **`list_ppt_themes()`**
+  Show available colour themes.
 
----
+## Trigger Conditions
 
-## Step-by-Step Process
-
-### STEP 1: Understand Context (MANDATORY)
-
-Before creating any slides, identify:
-
-*Presentation Type:*
-- Hackathon → Modern, bold, tech-focused
-- Business → Professional, clean, corporate
-- Academic → Formal, structured, minimal
-- Startup Pitch → Dynamic, impact-driven
-- Technical → Diagram-heavy, structured
-
-*Choose Theme:*
-python
-list_ppt_themes()  # See available themes
-
-# Themes available:
-# - "default"   → Clean white · navy titles · blue accents
-# - "dark"      → Dark background · white text · cyan accents
-# - "corporate" → Light grey · dark navy · red accents
-# - "creative"  → White · purple/pink · orange accents
-
-
-*Example:*
-User asks: "Create a hackathon pitch for our AI traffic system"
-→ Type: Hackathon
-→ Theme: "default" or "creative"
-→ Style: Modern, visual-heavy, impact-driven
+Use this skill when the user says any of:
+- "ppt", "pptx", "powerpoint", "presentation", "slides", "slide", "deck"
+- "make a deck", "build slides", "create a presentation"
 
 ---
 
-### STEP 2: Create Structured Plan (MANDATORY)
+## Instructions — FOLLOW THIS EXACT ORDER
 
-*For Hackathon Projects (10-12 slides):*
+### Step 1 — Think in STORY FORMAT
 
-Title Slide
-Problem Statement
-Existing Solutions & Gaps
-Our Solution
-How It Works (Flow Diagram)
-Architecture (System Diagram)
-Tech Stack
-Key Features
-Demo/Screenshots
-Impact & Results
-Future Roadmap
-Team & Thank You
+Every presentation should follow a narrative arc:
+1. **Problem / Context** — Why does this matter?
+2. **Insight / Analysis** — What does the data show?
+3. **Solution / Approach** — What's the plan?
+4. **Impact / Results** — What will change?
 
+**Use strong slide titles:**
+- BAD: "Introduction"
+- GOOD: "Why This Problem Matters Now"
+- BAD: "Data"
+- GOOD: "Revenue Grew 3x in 12 Months"
+- BAD: "Conclusion"
+- GOOD: "The Path Forward: A $2M Opportunity"
 
-*For Business Presentations (8-10 slides):*
+### Step 2 — Decide What Visuals to Use
 
-Title Slide
-Executive Summary
-Market Analysis
-Our Solution
-Business Model
-Competitive Advantage
-Go-to-Market Strategy
-Financial Projections
-Team
-Ask/Next Steps
+For EVERY slide, ask yourself: **can this be visual?**
 
+| Content Type | Best Visual | Tool to Use |
+|---|---|---|
+| Numbers / metrics / comparisons | Chart (bar, line, pie) | `generate_chart_image()` or `type='chart'` |
+| Processes / workflows / steps | Diagram (flowchart, pipeline) | `generate_diagram_image()` or `type='diagram'` |
+| System design / architecture | Architecture diagram | `generate_diagram_image(diagram_type='architecture')` |
+| Concepts / abstract topics | Stock image | `fetch_relevant_image()` then `type='image'` |
+| Before vs After / two options | Comparison slide | `type='comparison'` |
+| Key takeaways / summary points | Bullet slide | `type='bullet'` (max 6 bullets) |
+| Long explanation | Text slide | `type='text'` (use sparingly) |
 
-*For Technical Presentations (8-10 slides):*
+**Rules:**
+- NEVER create a presentation with ONLY bullet slides
+- ALWAYS include at least 1 visual (chart, diagram, or image) in decks with 5+ slides
+- Avoid text-heavy slides — max 6 bullets, each under 12 words
 
-Title Slide
-Overview
-System Architecture
-Component Breakdown
-Data Flow
-Technology Stack
-Implementation Details
-Performance Metrics
-Security & Scalability
-Conclusion
+### Step 3 — Build slides_data
 
+Build a Python list of dicts. Each dict MUST have a `type` key.
 
-*Log the plan:*
-[STEP 2/10] Creating presentation plan...
-Identified: Hackathon pitch
-Theme: default
-Structure: 12 slides
-✅ Plan created
+#### Slide Types & Examples:
 
----
+**Bullet slide** (max 6 concise bullets):
+```python
+{"type": "bullet", "heading": "Key Growth Drivers", "bullets": ["Revenue up 25% YoY", "10K+ customers acquired", "NPS score reached 72"]}
+```
 
-### STEP 3: Gather Images (CRITICAL)
+**Section divider** (use between major sections):
+```python
+{"type": "section", "heading": "Deep Dive: Market Analysis", "subtitle": "Understanding the competitive landscape"}
+```
 
-*For EACH slide, identify what images would enhance it:*
+**Text slide** (for executive summaries):
+```python
+{"type": "text", "heading": "Executive Summary", "body": "Our analysis reveals a significant opportunity..."}
+```
 
-*Example - Problem Statement Slide:*
-python
-# Search for relevant image
-browser(
-    action="search",
-    query="traffic congestion city problem illustration high quality"
-)
+**Comparison slide** (two columns):
+```python
+{"type": "comparison", "heading": "Current vs Proposed", "left_title": "Today", "left_items": ["Manual process", "3-day turnaround"], "right_title": "Proposed", "right_items": ["Fully automated", "Real-time"]}
+```
 
-# Navigate to a good result
-browser(
-    action="navigate",
-    url="<best_image_source_url>"
-)
+**Chart slide** (auto-generates chart image):
+```python
+{"type": "chart", "heading": "Revenue by Quarter", "chart_type": "bar", "chart_data": {"labels": ["Q1","Q2","Q3","Q4"], "values": [2100, 2600, 3200, 4100]}}
+```
 
-# Download the image (use appropriate method)
-# Save to: output/assets/slide_02_problem.jpg
+Multi-series chart:
+```python
+{"type": "chart", "heading": "Revenue vs Cost", "chart_type": "line", "chart_data": {"labels": ["Q1","Q2","Q3","Q4"], "series": [{"name": "Revenue", "values": [2100,2600,3200,4100]}, {"name": "Cost", "values": [1500,1700,1900,2100]}]}}
+```
 
+Pie chart:
+```python
+{"type": "chart", "heading": "Market Share", "chart_type": "pie", "chart_data": {"labels": ["Us","Competitor A","Competitor B","Others"], "values": [35,25,20,20]}}
+```
 
-*Image Requirements by Slide Type:*
-Slide Type              Image Needed            Search Query Examples
-─────────────────────────────────────────────────────────────────────
-Title                   Hero/background         "tech innovation hero image"
-Problem Statement       Illustration            "traffic problem illustration"
-Solution                Product/demo            "AI dashboard screenshot"
-Architecture            Diagram                 "cloud architecture diagram"
-Tech Stack              Logos (3-6)             "Python logo official high res"
-Features                Icons (3-6)             "AI feature icons modern"
-Demo                    Screenshots (2-4)       Actual product screenshots
-Impact                  Charts/graphs           "data visualization chart"
-Team                    Photos                  Team member photos
+**Diagram slide** (auto-generates diagram image):
 
-*Image Download Pattern:*
-[STEP 3/10] Gathering images for all slides...
-[3.1] Title slide background...
-→ Searching: "AI technology hero background"
-→ Downloading: output/assets/slide_01_hero.jpg
-✅ Image saved (1920x1080)
-[3.2] Problem illustration...
-→ Searching: "traffic congestion city illustration"
-→ Downloading: output/assets/slide_02_problem.jpg
-✅ Image saved
-[3.3] Architecture diagram...
-→ Searching: "cloud system architecture diagram"
-→ Downloading: output/assets/slide_05_architecture.png
-✅ Diagram saved
-[3.4] Tech stack logos...
-→ Downloading: Python logo
-→ Downloading: React logo
-→ Downloading: PostgreSQL logo
-✅ 3 logos acquired
-[3.5] Feature icons...
-→ Searching: "AI feature icons set"
-→ Downloading 3 icons
-✅ Icons ready
-✅ All images acquired (8 total)
+Flowchart:
+```python
+{"type": "diagram", "heading": "Process Flow", "diagram_type": "flowchart", "diagram_content": {"steps": ["User Submits", "Validate Data", "Process Payment", "Send Confirmation"]}}
+```
 
-*Validation:*
-After downloading each image, verify:
-- File exists
-- File size > 10KB (not broken)
-- Proper format (.jpg, .png)
+Architecture:
+```python
+{"type": "diagram", "heading": "System Architecture", "diagram_type": "architecture", "diagram_content": {"layers": [{"name": "Frontend", "items": ["React", "Next.js"]}, {"name": "Backend", "items": ["FastAPI", "Redis"]}, {"name": "Database", "items": ["PostgreSQL", "S3"]}]}}
+```
 
----
+Pipeline:
+```python
+{"type": "diagram", "heading": "Data Pipeline", "diagram_type": "pipeline", "diagram_content": {"stages": ["Ingest", "Clean", "Transform", "Model", "Deploy"]}}
+```
 
-### STEP 4: Create Content (Text Guidelines)
+**Image slide** (for fetched images):
+```python
+# First fetch the image
+img_path = fetch_relevant_image(query="data analytics dashboard", filename="output/analytics.jpg")
+# Then use it
+{"type": "image", "heading": "Our Analytics Platform", "image_path": img_path, "caption": "Real-time business intelligence"}
+```
 
-*Rules:*
-- *Maximum 5 bullet points* per slide
-- *Maximum 10 words* per bullet
-- Use *action verbs* and *concrete numbers*
-- No full sentences - use phrases
-- Keep it sharp and impactful
+### Step 4 — Choose a Theme
 
-*Good Examples:*
-✅ "Reduced processing time by 60%"
-✅ "Real-time AI traffic optimization"
-✅ "Served 50,000+ users in 3 months"
-✅ "Built with Python, React, PostgreSQL"
+| Theme | Best For | Look |
+|---|---|---|
+| `default` | General purpose | White, blue accents |
+| `dark` | Tech / modern | Dark background, cyan accents |
+| `corporate` | Business / formal | Grey, navy + red |
+| `creative` | Marketing / design | White, purple/pink/orange |
+| `consulting` | Board / strategy | White, navy + orange (McKinsey-style) |
 
-*Bad Examples:*
-❌ "We have successfully reduced the processing time"
-❌ "The application uses artificial intelligence"
-❌ "Our system is very efficient and scalable"
+### Step 5 — Call the Tool
 
----
-
-### STEP 5: Build slides_data Structure
-
-*Prepare the data for create_presentation():*
-
-python
+```python
 slides_data = [
-    # Slide 1: Section header
-    {
-        "type": "section",
-        "heading": "The Problem",
-        "subtitle": "Why current solutions fail"
-    },
-    
-    # Slide 2: Bullet points
-    {
-        "type": "bullet",
-        "heading": "Traffic Challenges",
-        "bullets": [
-            "Congestion costs $87B annually",
-            "54 hours lost per driver yearly",
-            "Current systems are reactive",
-            "No predictive capabilities",
-            "Limited real-time data"
-        ]
-    },
-    
-    # Slide 3: Text slide
-    {
-        "type": "text",
-        "heading": "Our Solution",
-        "body": "AI-powered traffic optimization platform using real-time data from 10,000+ sensors. Predicts congestion 30 minutes in advance with 94% accuracy."
-    },
-    
-    # Slide 4: Comparison
-    {
-        "type": "comparison",
-        "heading": "Before vs After",
-        "left_title": "Current System",
-        "left_items": [
-            "Reactive traffic signals",
-            "No prediction",
-            "Manual adjustments",
-            "Limited coverage"
-        ],
-        "right_title": "Our System",
-        "right_items": [
-            "AI-powered optimization",
-            "30-min prediction",
-            "Automated real-time",
-            "City-wide coverage"
-        ]
-    },
-    
-    # Slide 5: Image slide (for diagrams)
-    {
-        "type": "image",
-        "heading": "System Architecture",
-        "image_path": "output/assets/slide_05_architecture.png",
-        "caption": "Cloud-based AI processing with edge computing"
-    },
-    
-    # Add more slides...
+    {"type": "section", "heading": "Market Opportunity", "subtitle": "A $5B untapped market"},
+    {"type": "chart", "heading": "Revenue Growth Trajectory", "chart_type": "bar",
+     "chart_data": {"labels": ["2023","2024","2025","2026"], "values": [1.2, 2.4, 4.1, 6.8]}},
+    {"type": "bullet", "heading": "Our Strategic Advantages", "bullets": [
+        "First-mover in AI-powered automation",
+        "Patent-pending technology",
+        "95% customer retention rate",
+        "3x faster than competitors",
+    ]},
+    {"type": "diagram", "heading": "Implementation Roadmap", "diagram_type": "pipeline",
+     "diagram_content": {"stages": ["Discovery", "Design", "Build", "Launch", "Scale"]}},
+    {"type": "comparison", "heading": "Before vs After Implementation",
+     "left_title": "Before", "left_items": ["Manual data entry", "3-day processing", "60% accuracy"],
+     "right_title": "After", "right_items": ["Full automation", "Real-time", "95% accuracy"]},
 ]
 
-
-*Important Notes:*
-- Use *"type": "image"* for any slides with diagrams, screenshots, or large visuals
-- Use *"type": "comparison"* for before/after, option A vs B, etc.
-- Use *"type": "section"* for section breaks (full-color background slides)
-- Use *"type": "bullet"* for standard content slides
-- Use *"type": "text"* for paragraph-heavy slides (use sparingly)
-
----
-
-### STEP 6: Generate the Presentation
-
-*Call create_presentation():*
-
-python
-[STEP 6/10] Generating presentation...
-
 result = create_presentation(
-    filename="output/ai_traffic_system_pitch.pptx",
-    title="SmartFlow AI",
+    filename="output/strategy_deck.pptx",
+    title="Strategic Growth Initiative",
     slides_data=slides_data,
-    theme="default",
-    subtitle="AI-Powered Traffic Optimization",
-    author="Team Synergy"
+    theme="consulting",
+    subtitle="Board Presentation — Q2 2026",
+    author="Strategy Team"
 )
+print(result)
+```
 
-✅ Presentation created: output/ai_traffic_system_pitch.pptx (14 slides)
+### Step 6 — Visual Quality Assurance & Iteration (CRITICAL)
 
+After creating the file, you **MUST** verify its layout and present it to the user:
+1. **Self-Check:** Call `analyze_ppt_layout(filepath)`. If it reports overlaps or visual issues (e.g., elements overlapping, text too dense), use `create_presentation` again with adjusted `slides_data` (e.g., shorter text, different layout) to fix it.
+2. **Generate Screenshots:** Call `generate_ppt_preview(filepath)`. This creates a layout thumbnail (PNG) of the presentation.
+3. **Get User Feedback:** Call `ask_human_confirmation` from the runtime environment. 
+   Set `action="Review PPT Preview"`, `reason=f"Please review the screenshot at {png_path}."`, and `risk_level="LOW"`.
+4. **Re-iterate:** If the user is NOT satisfied and replies with changes (e.g., "make the theme dark", "shorten the text"), update your `slides_data` and repeat the creation and review steps.
 
-*For quick presentations (3 slides only):*
-python
-create_quick_ppt(
-    filename="output/quick_summary.pptx",
-    title="Project Summary",
-    bullet_points=[
-        "AI traffic optimization",
-        "94% prediction accuracy",
-        "50,000+ users served"
-    ],
-    theme="default"
-)
+### Step 7 — Report the Result
 
-
----
-
-### STEP 7: Verify Output with Screenshots (CRITICAL)
-
-*After creating the PPT, verify the output:*
-
-python
-[STEP 7/10] Verifying presentation quality...
-
-# Take screenshot of the saved PPT file
-# (This might require converting PPT to images first)
-
-# Alternative: Open the file location and take screenshot
-browser(
-    action="navigate",
-    url="file:///absolute/path/to/output/ai_traffic_system_pitch.pptx"
-)
-
-browser(
-    action="screenshot",
-    filename="ppt_verification.png"
-)
-
-✅ Screenshot saved for verification
-
-
-*Quality Checks:*
-✅ Visual Verification:
-
-All slides present (count matches plan)
-Images loaded correctly (not broken)
-Text is readable
-Colors are consistent
-Layout looks professional
-
-✅ Content Verification:
-
-No typos
-Bullet points are concise
-Images are relevant
-Proper sequencing
-
-
-*Report results:*
-[STEP 7/10] Verification complete
-Total slides: 14
-Images used: 8
-Theme: default
-File size: 2.4 MB
-✅ All checks passed
+After the user approves the layout, tell them:
+- The file path where the .pptx was saved
+- How many slides were created
+- Which theme was used
+- What visuals were generated (charts, diagrams)
 
 ---
 
-### STEP 8: Iterative Refinement (If Needed)
+## CRITICAL RULES
 
-*If user requests changes, use add_slide_to_ppt():*
+1. **ALWAYS save to the output/ directory** — e.g. `output/my_deck.pptx`
+2. **NEVER create empty presentations.** Every deck must have at least one content slide.
+3. **Keep bullet points concise** — max 6 bullets per slide, each under 12 words.
+4. **Use section slides** to break up decks with more than 5 content slides.
+5. **Pick a theme that matches the tone** — use `dark` for tech, `consulting` for business.
+6. **ALWAYS include visuals** — at least 1 chart or diagram in decks with 5+ slides.
+7. **NEVER create text-only presentations** — always enhance with visuals if applicable.
+8. **NEVER say "I can't create PowerPoint files"** — the PPT tools ARE REGISTERED.
+9. **NEVER try to import the tools** — they are already callable functions.
+10. **Use storytelling structure** — Problem → Insight → Solution → Impact.
+11. **If the user wants to add slides later**, use `add_slide_to_ppt`.
+12. **Generate charts/diagrams AUTOMATICALLY** when `type='chart'` or `type='diagram'` is used — the tool handles image creation internally.
 
-python
-# User says: "Add a slide about team members"
+## Output Format
 
-[STEP 8/10] Adding requested slide...
-
-add_slide_to_ppt(
-    filepath="output/ai_traffic_system_pitch.pptx",
-    slide_type="bullet",
-    heading="Our Team",
-    content=[
-        "John Doe - AI/ML Lead",
-        "Jane Smith - Backend Engineer",
-        "Bob Wilson - Frontend Developer",
-        "Alice Chen - Data Scientist"
-    ]
-)
-
-✅ Slide added. Presentation now has 15 slides.
-
-
-*For different slide types:*
-python
-# Add section header
-add_slide_to_ppt(
-    filepath="path/to/file.pptx",
-    slide_type="section",
-    heading="Future Roadmap",
-    content=["Q3-Q4 2026 Plans"]  # Subtitle
-)
-
-# Add text slide
-add_slide_to_ppt(
-    filepath="path/to/file.pptx",
-    slide_type="text",
-    heading="Technical Details",
-    content=["Long paragraph of explanation..."]
-)
-
-
-*DO NOT regenerate entire presentation for small changes.*
-
----
-
-### STEP 9: Final Delivery
-
-*Report to user:*
-✅ Presentation Created Successfully!
-📊 Details:
-* File: output/ai_traffic_system_pitch.pptx
-* Slides: 14
-* Theme: default
-* Images: 8
-* File size: 2.4 MB
-📋 Slide Breakdown:
-
-Title: SmartFlow AI
-Section: The Problem
-Bullet: Traffic Challenges
-Text: Our Solution
-Comparison: Before vs After
-Image: System Architecture
-Bullet: Tech Stack
-Bullet: Key Features
-Image: Demo Screenshots
-Bullet: Impact & Results
-Bullet: Future Roadmap
-Bullet: Our Team
-Thank You
-
-Would you like any changes or additions?
-
----
-
-## Complete Workflow Example
-User: "Create a hackathon pitch for our AI traffic system"
-[STEP 1/10] Understanding context...
-→ Type: Hackathon pitch
-→ Theme: default
-→ Style: Modern, visual-heavy
-✅ Context identified
-[STEP 2/10] Creating presentation plan...
-→ Structure: 12 slides
-→ Sections: Problem, Solution, Tech, Demo, Impact
-✅ Plan created
-[STEP 3/10] Gathering images...
-[3.1] Title background... ✅
-[3.2] Problem illustration... ✅
-[3.3] Architecture diagram... ✅
-[3.4] Tech logos (3)... ✅
-[3.5] Feature icons (4)... ✅
-✅ 10 images acquired
-[STEP 4/10] Creating content...
-→ Writing concise bullet points
-→ Crafting impactful headlines
-✅ Content ready
-[STEP 5/10] Structuring slides_data...
-→ 12 slides configured
-→ Images mapped to slides
-✅ Data structure complete
-[STEP 6/10] Generating presentation...
-create_presentation(
-filename="output/smartflow_pitch.pptx",
-title="SmartFlow AI",
-slides_data=[...],
-theme="default"
-)
-✅ PPT created (14 slides including title & thank you)
-[STEP 7/10] Verifying output...
-→ Taking screenshot
-→ Checking slide count
-→ Validating images
-✅ Verification complete
-[STEP 8/10] Final review...
-✅ All slides present
-✅ Images loaded correctly
-✅ Text is readable
-✅ Professional appearance
-✅ TASK COMPLETE
-📊 Presentation: output/smartflow_pitch.pptx
-Slides: 14
-Theme: default
-Images: 10
-Ready for presentation!
-Would you like any changes?
-
----
-
-## Best Practices
-
-### Image Acquisition
-- *Always search* for high-quality images (1920x1080+)
-- *Download* before building slides
-- *Validate* each file after download
-- *Organize* in output/assets/ folder
-- *Use descriptive* filenames (slide_05_architecture.png)
-
-### Content Writing
-- *Be concise* - max 10 words per bullet
-- *Use numbers* - "60% faster" not "much faster"
-- *Action verbs* - "Reduced", "Achieved", "Built"
-- *No jargon* - keep language simple
-- *Impactful* - every word counts
-
-### Slide Design
-- *Max 5 bullets* per slide
-- *One key idea* per slide
-- *Images > text* - visual heavy
-- *Consistent* theme throughout
-- *White space* - don't overcrowd
-
-### Tools Usage
-- Use *create_presentation()* for full presentations
-- Use *create_quick_ppt()* only for simple 3-slide decks
-- Use *add_slide_to_ppt()* for refinements (don't regenerate)
-- Use *list_ppt_themes()* to show theme options
-
----
-
-## Common Patterns
-
-### Pattern 1: Hackathon Pitch
-Structure: Title → Problem → Solution → How It Works →
-Tech Stack → Features → Demo → Impact → Team
-Images: Hero background, problem illustration, architecture,
-tech logos, feature icons, demo screenshots
-Theme: "default" or "creative"
-
-### Pattern 2: Business Proposal
-Structure: Title → Executive Summary → Market → Solution →
-Business Model → Competition → Financials → Team → Ask
-Images: Professional stock photos, charts, graphs, logos
-Theme: "corporate"
-
-### Pattern 3: Technical Presentation
-Structure: Title → Overview → Architecture → Components →
-Data Flow → Tech Stack → Implementation →
-Performance → Security → Conclusion
-Images: Diagrams (many!), architecture charts, code snippets,
-performance graphs
-Theme: "default"
-
----
-
-## Error Handling
-
-*If image download fails:*
-⚠️ Image download failed for slide 5
-→ Action: Continue without image or use placeholder
-→ Note in output: "Architecture slide created without diagram"
-
-*If theme doesn't exist:*
-⚠️ Theme "purple" not found
-→ Action: Use "default" theme
-→ Notify user: "Using default theme instead"
-
-*If PPT creation fails:*
-❌ create_presentation() failed
-→ Action: Try create_quick_ppt() as fallback
-→ OR: Ask user for simpler structure
-
----
-
-## Success Criteria
-
-A presentation task is complete when:
-
-✅ Presentation file created in output/ folder
-✅ All planned slides are present
-✅ Images are loaded and visible
-✅ Content is concise and impactful
-✅ Theme is applied consistently
-✅ File is verified with screenshot
-✅ User is informed of result
-✅ Offer made for refinements
-
----
-
-## Remember
-
-- *Plan first* - don't jump straight to coding
-- *Images matter* - spend time finding good ones
-- *Be concise* - fewer words, more impact
-- *Verify output* - always check the final file
-- *Iterate* - use add_slide_to_ppt() for changes
-- *Theme matters* - match context (hackathon ≠ corporate)
-
-This skill makes you excellent at creating professional, impactful presentations.
-Use it to deliver presentation files that win hackathons and close deals
+Always include in your final answer:
+- File path to the .pptx
+- Number of slides created
+- Theme used
+- List of visuals generated (charts, diagrams, images)
+- Brief summary of the slide structure

@@ -21,6 +21,8 @@ ENV/
 .env
 !.env.example
 tools/email_creds.txt
+credentials.json
+token.json
 
 # ── Output artefacts ─────────────────────────────────────
 output/*
