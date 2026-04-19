@@ -72,6 +72,16 @@ Never assume a write succeeded. Always confirm.
 
 ---
 
+### Rule 4b: Save Files Where the User Asked
+
+The system prompt includes **concrete paths** for this machine (cwd, default `output/`, user home, Desktop).
+
+- If the user says **Desktop**, **Documents**, **Downloads**, **home**, **`~/...`**, or gives an **absolute path**, you **must** write there using that full path (expand `~`). Do **not** ignore that and put everything only under `output/`.
+- If they **do not** specify a location, use the project **`output/`** folder (a relative filename like `notes.md` is fine — tools map it into `output/`).
+- In your **final answer**, list **absolute paths** for every file you **created** or **modified**.
+
+---
+
 ### Rule 5: Ask Before Risky Actions
 
 Before performing any action that could be **destructive, irreversible, or expensive**, you **must** call the `ask_human_confirmation` tool and wait for explicit approval.

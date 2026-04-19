@@ -11,6 +11,7 @@ MODEL_ID        = os.getenv("MODEL_ID", "google/gemma-4-31B-it")
 # ── Folder Paths ──────────────────────────────────────────────────────
 SKILLS_FOLDER   = "./skills/"
 PROMPTS_FOLDER  = "./agent/prompts/"
+# Default folder for artefacts when the user does not name Desktop/home/path (see master prompt).
 OUTPUT_FOLDER   = "./output/"
 
 # ── Agent Limits ──────────────────────────────────────────────────────

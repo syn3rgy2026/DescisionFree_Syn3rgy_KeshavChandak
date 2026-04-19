@@ -10,15 +10,19 @@ and managing files across multiple formats including:
 * Word documents (.docx)
 * Code files (.py, .js, .cpp, etc.)
 
-All write operations are sandboxed to the output/ directory defined in config.OUTPUT_FOLDER.
+Writes: relative paths go under `output/` (config.OUTPUT_FOLDER). Absolute paths are allowed
+under the project working directory, that output folder, or the user's home (so Desktop
+and similar paths from the user work). Other locations are rejected.
 """
 
 import os
 import csv
 import json
 import logging
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 from smolagents import tool
+import config
 from tools.scraper_tool import scrape_website, scrape_website_structured
 from tools.web_screenshot import capture_website_screenshot
 from tools.web_search_tool import search_web, search_news
@@ -27,13 +31,104 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger("file_tool")
 
 
-def _get_safe_path(filename: str) -> str:
-    full_path = os.path.abspath(filename)
-    os.makedirs(os.path.dirname(full_path), exist_ok=True)
-    return full_path
+def _output_directory_abs() -> str:
+    """Absolute path to the default artefact directory (project output/)."""
+    of = config.OUTPUT_FOLDER.replace("\\", "/").strip()
+    if of.startswith("./"):
+        of = of[2:].strip("/")
+    return str(Path.cwd() / of)
+
+
+def _write_allowed_roots() -> tuple[str, ...]:
+    """Writes are allowed under: default output dir, cwd, user home (Desktop, Documents, …)."""
+    out = _output_directory_abs()
+    cwd = str(Path.cwd().resolve())
+    home = str(Path.home().resolve())
+    return tuple(dict.fromkeys((out, cwd, home)))
+
+
+def _is_under_root(root: str, path: str) -> bool:
+    try:
+        root_r = Path(root).resolve()
+        path_r = Path(path).resolve()
+    except OSError:
+        return False
+    try:
+        path_r.relative_to(root_r)
+        return True
+    except ValueError:
+        return path_r == root_r
+
+
+def _path_allowed_for_write(abs_path: str) -> bool:
+    ap = str(Path(abs_path))
+    for r in _write_allowed_roots():
+        if _is_under_root(r, ap):
+            return True
+    return False
+
+
+def _resolve_write_path(filename: str) -> str:
+    """
+    Resolve a target path for create/write tools.
+
+    - Absolute paths (after ~ / env expand) must stay under project cwd, OUTPUT_FOLDER,
+      or the user's home directory so Desktop/Documents requests work.
+    - Relative paths are rooted under OUTPUT_FOLDER (not bare cwd), so `report.csv`
+      becomes `<project>/output/report.csv`.
+    """
+    raw = (filename or "").strip()
+    if not raw:
+        raise ValueError("filename is empty")
+
+    expanded = os.path.expandvars(os.path.expanduser(raw))
+    out_abs = _output_directory_abs()
+
+    if Path(expanded).is_absolute():
+        full = str(Path(expanded).resolve())
+        parent = str(Path(full).parent)
+        if parent and parent != full:
+            os.makedirs(parent, exist_ok=True)
+        if not _path_allowed_for_write(full):
+            raise ValueError(
+                "Refusing to write outside allowed locations (project output/, cwd, or user home). "
+                f"Got: {full}"
+            )
+        return full
+
+    rel = expanded.replace("\\", "/").lstrip("./")
+    out_seg = Path(out_abs).name
+    parts = rel.split("/")
+    if parts and parts[0] == out_seg:
+        rel = "/".join(parts[1:]) if len(parts) > 1 else ""
+    target = str(Path(out_abs) / rel) if rel else out_abs
+    full = str(Path(target).resolve())
+    if not _is_under_root(out_abs, full):
+        raise ValueError(f"Invalid relative path (escapes output folder): {filename!r}")
+    parent = str(Path(full).parent)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    return full
+
+
+def _resolve_delete_path(path: str) -> str:
+    p = os.path.expandvars(os.path.expanduser(path.strip()))
+    if not Path(p).is_absolute():
+        p = _resolve_write_path(path)
+    full = str(Path(p).resolve())
+    if not _path_allowed_for_write(full):
+        raise ValueError(f"Refusing to delete outside allowed locations: {full}")
+    return full
 
 def _log_action(action: str, details: str):
     logger.info(f"{action} | {details}")
+
+
+def _resolve_write_path_result(filename: str) -> tuple[str | None, str | None]:
+    try:
+        return _resolve_write_path(filename), None
+    except ValueError as e:
+        return None, str(e)
 
 
 @tool
@@ -47,23 +142,27 @@ def read_file(path: str) -> str:
     Returns:
         Full text content of the file.
     """
-    with open(path, "r", encoding="utf-8") as f:
+    rp = os.path.expandvars(os.path.expanduser(path))
+    with open(rp, "r", encoding="utf-8") as f:
         return f.read()
 
 @tool
 def write_file(filename: str, content: str) -> str:
     """
-    Write content to a file inside the output/ directory.
-    Use this for Text or Code files, adding comments/formatting where necessary.
+    Write text or code to a file. If the user asked for Desktop/Documents/home or gave an
+    absolute path, use that full path (e.g. ~/Desktop/notes.md). If they did not specify a
+    location, a relative name like `report.md` is stored under the project `output/` folder.
 
     Args:
-        filename: Name of the file to create or overwrite (no path prefix).
+        filename: Relative name under output/, or path under home/cwd as allowed.
         content: Text content to write.
 
     Returns:
         Absolute path to the written file.
     """
-    full_path = _get_safe_path(filename)
+    full_path, err = _resolve_write_path_result(filename)
+    if err:
+        return f"ERROR: {err}"
     with open(full_path, "w", encoding="utf-8") as f:
         f.write(content)
     _log_action("Write file", f"Written to {full_path}")
@@ -72,16 +171,18 @@ def write_file(filename: str, content: str) -> str:
 @tool
 def append_file(filename: str, content: str) -> str:
     """
-    Append content to an existing file in the output/ directory.
+    Append content to an existing file (same path rules as write_file).
 
     Args:
-        filename: Target filename inside output/.
+        filename: Target path (relative → under output/).
         content: Text to append.
 
     Returns:
         Absolute path to the modified file.
     """
-    full_path = _get_safe_path(filename)
+    full_path, err = _resolve_write_path_result(filename)
+    if err:
+        return f"ERROR: {err}"
     with open(full_path, "a", encoding="utf-8") as f:
         f.write(content)
     _log_action("Append file", f"Appended to {full_path}")
@@ -103,7 +204,7 @@ def list_files(directory: str) -> list:
 @tool
 def delete_file(path: str) -> bool:
     """
-    Delete a file at the given path (restricted to output/ directory).
+    Delete a file at the given path (same allowed roots as writes).
 
     Args:
         path: Path to the file to delete.
@@ -111,14 +212,13 @@ def delete_file(path: str) -> bool:
     Returns:
         True if deletion succeeded.
     """
-    if not os.path.isabs(path):
-        path = _get_safe_path(path)
     try:
-        if os.path.exists(path):
-            os.remove(path)
-            _log_action("Delete file", f"Deleted {path}")
+        full = _resolve_delete_path(path)
+        if os.path.exists(full):
+            os.remove(full)
+            _log_action("Delete file", f"Deleted {full}")
         return True
-    except Exception:
+    except (ValueError, OSError, PermissionError):
         return False
 
 @tool
@@ -148,7 +248,9 @@ def write_json_file(filename: str, data: dict) -> str:
     Returns:
         Absolute path to the written file.
     """
-    full_path = _get_safe_path(filename)
+    full_path, err = _resolve_write_path_result(filename)
+    if err:
+        return f"ERROR: {err}"
     with open(full_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4)
     _log_action("Write JSON", f"Written to {full_path}")
@@ -167,7 +269,9 @@ def write_csv_file(filename: str, headers: list, rows: list) -> str:
     Returns:
         Absolute path to the written file.
     """
-    full_path = _get_safe_path(filename)
+    full_path, err = _resolve_write_path_result(filename)
+    if err:
+        return f"ERROR: {err}"
     with open(full_path, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
         writer.writerow(headers)
@@ -189,7 +293,9 @@ def create_excel_file(filename: str, headers: list, rows: list) -> str:
     Returns:
         Absolute path to the written file.
     """
-    full_path = _get_safe_path(filename)
+    full_path, err = _resolve_write_path_result(filename)
+    if err:
+        return f"ERROR: {err}"
     try:
         import xlsxwriter
         workbook = xlsxwriter.Workbook(full_path)
@@ -218,7 +324,9 @@ def create_word_document(filename: str, title: str, paragraphs: list) -> str:
     Returns:
         Absolute path to the written file.
     """
-    full_path = _get_safe_path(filename)
+    full_path, err = _resolve_write_path_result(filename)
+    if err:
+        return f"ERROR: {err}"
     try:
         import docx
         doc = docx.Document()
@@ -246,7 +354,9 @@ def create_ppt_presentation(filename: str, slide_title: str, bullet_points: list
     Returns:
         Absolute path to the written file.
     """
-    full_path = _get_safe_path(filename)
+    full_path, err = _resolve_write_path_result(filename)
+    if err:
+        return f"ERROR: {err}"
     try:
         from pptx import Presentation
         prs = Presentation()

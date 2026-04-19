@@ -1,0 +1,157 @@
+/* ═══════════════════════════════════════════════════════════
+   Synergy Agent — clean terminal UI (reasoning-first)
+   ═══════════════════════════════════════════════════════════ */
+
+Screen {
+    background: #0d1117;
+    color: #c9d1d9;
+}
+
+#agent-header {
+    dock: top;
+    height: 3;
+    background: #0d1117;
+    color: #8b949e;
+    padding: 0 2;
+    border-bottom: heavy #21262d;
+}
+
+#main-body {
+    height: 1fr;
+}
+
+#left-column {
+    width: 38;
+    border-right: heavy #21262d;
+    background: #0d1117;
+}
+
+#center-column {
+    width: 1fr;
+    background: #0d1117;
+}
+
+#right-column {
+    width: 36;
+    background: #0c0f14;
+    border-left: heavy #21262d;
+}
+
+#task-header {
+    height: 3;
+    padding: 0 2;
+    border-bottom: solid #21262d;
+    color: #58a6ff;
+}
+
+#session-insight {
+    height: 2;
+    padding: 0 2;
+    background: #11161d;
+    border-bottom: solid #21262d;
+    text-wrap: wrap;
+}
+
+#plan-scroll {
+    height: 1fr;
+    min-height: 8;
+    max-height: 52%;
+    scrollbar-gutter: stable;
+}
+
+#plan-tree {
+    height: auto;
+    padding: 0 1 1 1;
+    text-style: none;
+}
+
+#steps-feed {
+    scrollbar-gutter: stable;
+    padding: 0 1 1 1;
+}
+
+#activity-panel {
+    background: #0d1117;
+    padding: 1 2;
+}
+
+#activity-title, #context-title, #findings-title {
+    padding: 0 2;
+    color: #79c0ff;
+    text-style: bold;
+    height: 1;
+    background: #11161d;
+    border-bottom: solid #21262d;
+}
+
+#context-panel, #findings-panel {
+    background: #0c0f14;
+}
+
+#context-panel ListItem {
+    height: auto;
+    padding: 0 1;
+    color: #8b949e;
+}
+
+#context-panel ListItem:hover {
+    background: #161b22;
+}
+
+StepWidget {
+    height: auto;
+    margin-bottom: 1;
+    padding: 0 1;
+}
+
+StepWidget.active {
+    background: #111923;
+    border-left: outer #58a6ff;
+}
+
+StepWidget.done {
+    border-left: outer #238636;
+}
+
+StepWidget.error {
+    border-left: outer #d29922;
+}
+
+#input-hint {
+    dock: bottom;
+    height: 1;
+    color: #484f58;
+    background: #11161d;
+    padding: 0 2;
+}
+
+#agent-input {
+    dock: bottom;
+    background: #21262d;
+    color: #f0f6fc;
+    border: tall #30363d;
+    padding: 0 2;
+}
+
+#agent-input:focus {
+    background: #2a3038;
+    border: tall #58a6ff;
+}
+
+#progress-row {
+    height: 3;
+    padding: 0 2;
+    background: #11161d;
+    border-top: solid #21262d;
+}
+
+ProgressBar > .progress_bar--bar {
+    color: #58a6ff;
+}
+
+#plan-section-label, #log-section-label {
+    padding: 0 2;
+    color: #484f58;
+    text-style: bold;
+    height: 1;
+}

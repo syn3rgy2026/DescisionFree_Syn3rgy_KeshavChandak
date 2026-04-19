@@ -33,27 +33,20 @@ def run_with_recovery(run_fn, task: str, max_attempts: int = 3):
     current_task = task
 
     for attempt in range(1, max_attempts + 1):
-        console.print(
-            f"\n[bold cyan]🔄 Attempt {attempt}/{max_attempts}[/bold cyan]"
-        )
+        # We no longer print raw "Attempt X/Y" here because it's now 
+        # rendered inside the TUI Dashboard header by run_agent.
 
         try:
-            result = run_fn(current_task)
-            console.print("[bold green]✅ Task completed successfully![/bold green]")
+            # Pass the attempt number to run_fn (run_agent)
+            result = run_fn(current_task, attempt=attempt)
             return result, True
 
         except Exception as exc:
             last_error = exc
             error_msg = str(exc)
-            tb = traceback.format_exc()
-
-            console.print(f"[bold red]❌ Attempt {attempt} failed:[/bold red] {error_msg}")
-            console.print(f"[dim red]{tb}[/dim red]")
-
+            
+            # Silent logging or dim logging to avoid breaking dashboard flow
             if attempt < max_attempts:
-                console.print("[yellow]⏳ Waiting 2 seconds before retrying…[/yellow]")
-                time.sleep(2)
-
                 # Augment the task so the agent learns from the failure
                 current_task = (
                     f"{task}\n\n"
@@ -65,29 +58,19 @@ def run_with_recovery(run_fn, task: str, max_attempts: int = 3):
                 )
 
     # ── All attempts exhausted — ask the user ────────────────────────
-    console.print(
-        "\n[bold red]All 3 attempts failed.[/bold red]"
-    )
-
+    # Use high-contrast prompt for the recovery question
     while True:
         choice = console.input(
-            "[bold yellow]Would you like to rephrase the task? (yes/no): [/bold yellow]"
+            "\n[bold yellow]⚠️ All 3 attempts failed. Rephrase task? (yes/no): [/bold yellow]"
         ).strip().lower()
 
         if choice in ("yes", "y"):
             new_task = console.input("[bold cyan]Enter new task: [/bold cyan]").strip()
             if new_task:
                 return run_with_recovery(run_fn, new_task, max_attempts)
-            console.print("[yellow]Empty input — please try again.[/yellow]")
         elif choice in ("no", "n"):
-            summary = (
-                f"Task failed after {max_attempts} attempts.\n"
-                f"Original task: {task}\n"
-                f"Last error: {last_error}"
-            )
+            summary = f"Task failed after {max_attempts} attempts. Last error: {last_error}"
             return summary, False
-        else:
-            console.print("[yellow]Please type yes or no.[/yellow]")
 
 
 # ── Self-test: simulate failures and recovery ────────────────────────
