@@ -5,9 +5,33 @@ Execute code files (Python, Node, etc.), capture stdout/stderr/exit code,
 and format errors for debugging. Supports running tests too.
 """
 
+import json
 import os
+import shlex
 import subprocess
+import sys
 from smolagents import tool
+
+
+def _run_argv(argv: list[str], cwd: str | None = None, timeout: int = 60) -> dict:
+    """Run subprocess without shell — reliable on Windows for paths with spaces."""
+    try:
+        result = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=cwd or os.getcwd(),
+        )
+        return {
+            "exit_code": result.returncode,
+            "stdout": result.stdout.strip(),
+            "stderr": result.stderr.strip(),
+        }
+    except subprocess.TimeoutExpired:
+        return {"exit_code": -1, "stdout": "", "stderr": f"TIMEOUT after {timeout}s"}
+    except Exception as e:
+        return {"exit_code": -1, "stdout": "", "stderr": str(e)}
 
 
 def _run(cmd: str, cwd: str = None, timeout: int = 60) -> dict:
@@ -59,8 +83,15 @@ def run_code(file_path: str, args: str = "") -> str:
         return f"ERROR: File not found: {file_path}"
 
     ext = os.path.splitext(file_path)[1].lower()
+    abs_path = os.path.abspath(file_path)
+
+    if ext == ".py":
+        argv = [sys.executable, abs_path]
+        if args.strip():
+            argv.extend(shlex.split(args, posix=os.name != "nt"))
+        return _format_result(_run_argv(argv))
+
     runners = {
-        ".py": "python3",
         ".js": "node",
         ".ts": "npx ts-node",
         ".sh": "bash",
@@ -70,9 +101,9 @@ def run_code(file_path: str, args: str = "") -> str:
 
     runner = runners.get(ext)
     if not runner:
-        return f"ERROR: Unsupported file extension '{ext}'. Supported: {', '.join(runners.keys())}"
+        return f"ERROR: Unsupported file extension '{ext}'. Supported: .py, {', '.join(runners.keys())}"
 
-    cmd = f"{runner} {file_path}"
+    cmd = f"{runner} {shlex.quote(file_path)}"
     if args:
         cmd += f" {args}"
 
@@ -110,11 +141,25 @@ def run_lint(file_path: str) -> str:
         return f"ERROR: File not found: {file_path}"
 
     ext = os.path.splitext(file_path)[1].lower()
+
+    if ext == ".json":
+        try:
+            with open(file_path, encoding="utf-8") as f:
+                json.load(f)
+            return f"✅ No syntax errors in {file_path}"
+        except Exception as e:
+            return _format_result({"exit_code": 1, "stdout": "", "stderr": str(e)})
+
+    if ext == ".py":
+        r = _run_argv([sys.executable, "-m", "py_compile", os.path.abspath(file_path)])
+        if r["exit_code"] == 0:
+            return f"✅ No syntax errors in {file_path}"
+        return _format_result(r)
+
+    fp = shlex.quote(file_path)
     linters = {
-        ".py": f"python3 -m py_compile {file_path}",
-        ".js": f"npx eslint {file_path} --no-eslintrc 2>&1 || node --check {file_path}",
-        ".ts": f"npx tsc --noEmit {file_path}",
-        ".json": f"python3 -c \"import json; json.load(open('{file_path}'))\"",
+        ".js": f"npx eslint {fp} --no-eslintrc 2>&1 || node --check {fp}",
+        ".ts": f"npx tsc --noEmit {fp}",
     }
 
     linter_cmd = linters.get(ext)

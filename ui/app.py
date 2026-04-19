@@ -549,24 +549,41 @@ class SynergyAgentApp(App):
         self.start_time = time.time()
 
     def _run_agent(self, task: str) -> None:
+        import config as _cfg
         from agent.core_agent import build_agent
+        from agent.resilient_llm import is_transient_llm_error
         from ui.callbacks import TextualStepCallback
 
-        cb = None
-        try:
-            cb = TextualStepCallback(self, task)
-            agent = build_agent(task, step_callbacks=[cb])
-            res = agent.run(task)
-            self.call_from_thread(
-                self.show_finished,
-                str(res),
-                task,
-                list(cb.collected_errors),
-                list(cb.artifact_paths),
-            )
-        except Exception as e:
-            errs = list(cb.collected_errors) if cb else []
-            self.call_from_thread(self.show_error, str(e), task, errs)
+        max_runs = max(1, int(getattr(_cfg, "AGENT_RUN_MAX_RETRIES", 3)))
+
+        for run_idx in range(max_runs):
+            cb = None
+            try:
+                cb = TextualStepCallback(self, task)
+                agent = build_agent(task, step_callbacks=[cb])
+                res = agent.run(task)
+                self.call_from_thread(
+                    self.show_finished,
+                    str(res),
+                    task,
+                    list(cb.collected_errors),
+                    list(cb.artifact_paths),
+                )
+                return
+            except Exception as e:
+                errs = list(cb.collected_errors) if cb else []
+                if run_idx < max_runs - 1 and is_transient_llm_error(e):
+                    base = float(getattr(_cfg, "MODEL_RETRY_WAIT_SEC", 2.0))
+                    delay = min(45.0, base * (2**run_idx) * 2)
+                    self.call_from_thread(
+                        self.log_thinking,
+                        f"Transient API/network issue (will retry): {str(e)[:400]}\n"
+                        f"→ Full run retry {run_idx + 2}/{max_runs} in {delay:.0f}s…",
+                    )
+                    time.sleep(delay)
+                    continue
+                self.call_from_thread(self.show_error, str(e), task, errs)
+                return
 
     def show_finished(
         self,

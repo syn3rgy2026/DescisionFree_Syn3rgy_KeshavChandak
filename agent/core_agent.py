@@ -186,11 +186,13 @@ def build_agent(task: str, step_callbacks=None):
     Returns:
         CodeAgent: A ready-to-run agent instance.
     """
-    from smolagents import CodeAgent, OpenAIServerModel
+    from smolagents import CodeAgent
+
+    from agent.resilient_llm import ResilientOpenAIServerModel
 
     instructions = build_system_prompt(task)
 
-    model = OpenAIServerModel(
+    model = ResilientOpenAIServerModel(
         model_id=config.MODEL_ID,
         api_base=config.INFERX_ENDPOINT,
         api_key=config.INFERX_API_KEY,
@@ -217,7 +219,7 @@ def build_agent(task: str, step_callbacks=None):
     return agent
 
 
-def run_agent(task: str) -> str:
+def run_agent(task: str, *, attempt: int = 1) -> str:
     """
     Build an agent and execute the task in one call.
     Logs outcome to persistent memory.

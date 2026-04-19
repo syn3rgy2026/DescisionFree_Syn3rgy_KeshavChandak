@@ -1,0 +1,5 @@
+# Minimal deps for CI (pytest) — full app install uses requirements.txt
+pytest>=8,<9
+python-dotenv>=1.0
+rich>=13.0
+smolagents>=1.24
