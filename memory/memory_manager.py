@@ -1,69 +1,272 @@
-# OWNER: Person 4
 """
 memory_manager.py
 -----------------
 Manages persistent memory for Synergy Agent across sessions.
 
 Responsibilities:
-- Load and save user facts/preferences to memory/user_memory.md
-- Append task summaries and outcomes to memory/task_log.md
-- Provide a simple key-value interface for the agent to read/write user facts
-- Summarise recent task history for injection into the system prompt
+- Auto-save task results + errors after every task
+- Load relevant past context before each new task
+- Store and recall user facts (name, preferences, etc.)
+- Maintain a task log for the agent to learn from mistakes
 """
 
 import os
-import config
+import sqlite3
+from datetime import datetime
+
+DB_DIR = os.path.join(os.path.dirname(__file__), "data")
+DB_PATH = os.path.join(DB_DIR, "memory.db")
+
+
+def _get_connection() -> sqlite3.Connection:
+    """Return a connection to the memory database, creating tables if needed."""
+    os.makedirs(DB_DIR, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    # Existing memories table (used by persistent_memory tool)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS memories (
+            key       TEXT PRIMARY KEY,
+            value     TEXT NOT NULL,
+            category  TEXT NOT NULL DEFAULT 'fact',
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    # New task_history table — auto-populated after each task
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS task_history (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            task      TEXT NOT NULL,
+            result    TEXT NOT NULL,
+            status    TEXT NOT NULL DEFAULT 'completed',
+            errors    TEXT DEFAULT '',
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    return conn
 
 
 class MemoryManager:
-    """Handles reading and writing of user memory and task logs."""
+    """Manages reading and writing of task history and user memory."""
 
     def __init__(self):
-        """Initialise paths and load existing memory into internal state."""
-        raise NotImplementedError("Person 4 will implement this")
+        """Initialize and ensure DB tables exist."""
+        self.conn = _get_connection()
 
-    def load_user_memory(self) -> dict:
+    def log_task(self, task: str, result: str, status: str = "completed", errors: str = "") -> None:
         """
-        Parse user_memory.md and return a dict of stored user facts.
+        Save a completed task and its result to the task history.
 
-        Returns:
-            dict: Key-value pairs of user preferences and facts.
-        """
-        raise NotImplementedError("Person 4 will implement this")
-
-    def save_user_memory(self, key: str, value: str) -> None:
-        """
-        Persist a new or updated user fact to user_memory.md.
+        This is called automatically after every agent run so the agent
+        can learn from past successes and mistakes.
 
         Args:
-            key (str): Fact identifier (e.g. 'preferred_language').
-            value (str): Value to store.
+            task: The original user task string.
+            result: The agent's final result/output.
+            status: 'completed', 'failed', or 'error'.
+            errors: Any error messages encountered during the task.
         """
-        raise NotImplementedError("Person 4 will implement this")
+        try:
+            self.conn.execute(
+                "INSERT INTO task_history (task, result, status, errors) VALUES (?, ?, ?, ?)",
+                (task, str(result)[:5000], status, str(errors)[:2000]),
+            )
+            self.conn.commit()
+        except Exception as e:
+            print(f"⚠️  Failed to log task: {e}")
 
-    def log_task(self, task: str, result: str, status: str = "completed") -> None:
-        """
-        Append a task entry to task_log.md.
-
-        Args:
-            task (str): The original user task string.
-            result (str): Summary of what the agent produced.
-            status (str): Outcome status ('completed', 'failed', 'aborted').
-        """
-        raise NotImplementedError("Person 4 will implement this")
-
-    def get_recent_history(self, n: int = 5) -> list:
+    def get_recent_history(self, n: int = 5) -> list[dict]:
         """
         Return the n most recent task log entries.
 
         Args:
-            n (int): Number of entries to retrieve.
+            n: Number of entries to retrieve.
 
         Returns:
-            list[dict]: Each dict has keys 'task', 'result', 'status', 'timestamp'.
+            list[dict]: Each dict has keys 'task', 'result', 'status', 'errors', 'timestamp'.
         """
-        raise NotImplementedError("Person 4 will implement this")
+        try:
+            rows = self.conn.execute(
+                "SELECT task, result, status, errors, timestamp FROM task_history ORDER BY id DESC LIMIT ?",
+                (n,),
+            ).fetchall()
+            return [
+                {"task": r[0], "result": r[1], "status": r[2], "errors": r[3], "timestamp": r[4]}
+                for r in rows
+            ]
+        except Exception:
+            return []
+
+    def get_failed_tasks(self, n: int = 5) -> list[dict]:
+        """
+        Return the n most recent FAILED tasks — so the agent can avoid repeating mistakes.
+
+        Args:
+            n: Number of failed entries to retrieve.
+
+        Returns:
+            list[dict]: Failed task entries.
+        """
+        try:
+            rows = self.conn.execute(
+                "SELECT task, result, status, errors, timestamp FROM task_history "
+                "WHERE status != 'completed' ORDER BY id DESC LIMIT ?",
+                (n,),
+            ).fetchall()
+            return [
+                {"task": r[0], "result": r[1], "status": r[2], "errors": r[3], "timestamp": r[4]}
+                for r in rows
+            ]
+        except Exception:
+            return []
+
+    def search_history(self, query: str, n: int = 5) -> list[dict]:
+        """
+        Search task history for tasks similar to a query.
+
+        Args:
+            query: Search string to match against task descriptions.
+            n: Max results.
+
+        Returns:
+            list[dict]: Matching task history entries.
+        """
+        try:
+            rows = self.conn.execute(
+                "SELECT task, result, status, errors, timestamp FROM task_history "
+                "WHERE task LIKE ? OR result LIKE ? OR errors LIKE ? "
+                "ORDER BY id DESC LIMIT ?",
+                (f"%{query}%", f"%{query}%", f"%{query}%", n),
+            ).fetchall()
+            return [
+                {"task": r[0], "result": r[1], "status": r[2], "errors": r[3], "timestamp": r[4]}
+                for r in rows
+            ]
+        except Exception:
+            return []
+
+    def build_memory_context(self, task: str) -> str:
+        """
+        Build a context string to inject into the system prompt before a task.
+
+        This loads:
+        1. Recent task history (so the agent knows what it did before)
+        2. Past failures (so it doesn't repeat mistakes)
+        3. Relevant past tasks (keyword match against the new task)
+        4. Stored user facts from persistent memory
+
+        Args:
+            task: The new task the user is about to run.
+
+        Returns:
+            str: A formatted context block to prepend to the system prompt.
+        """
+        sections = []
+
+        # 1. Recent history (last 3 tasks)
+        recent = self.get_recent_history(3)
+        if recent:
+            lines = []
+            for entry in recent:
+                status_icon = "✅" if entry["status"] == "completed" else "❌"
+                result_preview = entry["result"][:200]
+                lines.append(
+                    f"- {status_icon} **{entry['task'][:100]}** → {result_preview}"
+                )
+                if entry["errors"]:
+                    lines.append(f"  ⚠️ Error: {entry['errors'][:150]}")
+            sections.append(
+                "## Recent Task History\n"
+                "You completed these tasks recently. Use this context to avoid repeating work.\n\n"
+                + "\n".join(lines)
+            )
+
+        # 2. Past failures — critical for learning
+        failures = self.get_failed_tasks(3)
+        if failures:
+            lines = []
+            for entry in failures:
+                lines.append(
+                    f"- ❌ **{entry['task'][:100]}**\n"
+                    f"  Error: {entry['errors'][:200]}\n"
+                    f"  Result: {entry['result'][:200]}"
+                )
+            sections.append(
+                "## ⚠️ Past Failures — DO NOT REPEAT THESE MISTAKES\n"
+                "These tasks failed before. If the current task is similar, use a DIFFERENT approach.\n\n"
+                + "\n".join(lines)
+            )
+
+        # 3. Scan actual files on disk so the agent knows what exists
+        # This is the KEY fix — the agent couldn't find research files before
+        try:
+            import glob
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            scan_dirs = [project_root, os.path.join(project_root, "output")]
+            extensions = ["*.md", "*.txt", "*.py", "*.html", "*.csv", "*.json", "*.docx", "*.pptx"]
+            found_files = []
+
+            for scan_dir in scan_dirs:
+                if not os.path.isdir(scan_dir):
+                    continue
+                for ext in extensions:
+                    for f in glob.glob(os.path.join(scan_dir, ext)):
+                        basename = os.path.basename(f)
+                        # Skip hidden files and common config
+                        if basename.startswith(".") or basename in ("config.py", "main.py", "requirements.txt"):
+                            continue
+                        rel = os.path.relpath(f, project_root)
+                        size = os.path.getsize(f)
+                        if size > 0:
+                            found_files.append(f"- `{rel}` ({size} bytes)")
+
+            # Also scan output/ subdirectories one level deep
+            output_dir = os.path.join(project_root, "output")
+            if os.path.isdir(output_dir):
+                for subdir in os.listdir(output_dir):
+                    subpath = os.path.join(output_dir, subdir)
+                    if os.path.isdir(subpath):
+                        for ext in extensions:
+                            for f in glob.glob(os.path.join(subpath, ext)):
+                                basename = os.path.basename(f)
+                                if not basename.startswith("."):
+                                    rel = os.path.relpath(f, project_root)
+                                    size = os.path.getsize(f)
+                                    if size > 0:
+                                        found_files.append(f"- `{rel}` ({size} bytes)")
+
+            if found_files:
+                sections.append(
+                    "## Files Available on Disk\n"
+                    "These files exist in the project. You can read them with `read_file`.\n\n"
+                    + "\n".join(found_files[:20])  # cap at 20 to avoid bloat
+                )
+        except Exception:
+            pass
+
+        # 4. User facts from persistent memory
+        try:
+            rows = self.conn.execute(
+                "SELECT key, value, category FROM memories ORDER BY timestamp DESC LIMIT 10"
+            ).fetchall()
+            if rows:
+                lines = [f"- [{r[2]}] {r[0]}: {r[1]}" for r in rows]
+                sections.append(
+                    "## Stored User Facts & Preferences\n"
+                    + "\n".join(lines)
+                )
+        except Exception:
+            pass
+
+        if not sections:
+            return ""
+
+        return "\n\n---\n\n".join(sections)
 
     def clear_task_log(self) -> None:
-        """Erase all entries from task_log.md."""
-        raise NotImplementedError("Person 4 will implement this")
+        """Erase all entries from task history."""
+        try:
+            self.conn.execute("DELETE FROM task_history")
+            self.conn.commit()
+        except Exception as e:
+            print(f"⚠️  Failed to clear task log: {e}")

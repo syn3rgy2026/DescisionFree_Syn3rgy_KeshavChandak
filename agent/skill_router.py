@@ -54,10 +54,14 @@ def get_skills_for_task(task: str) -> str:
             "research", "deep dive", "investigate", "analyze", "analyse",
             "deep research", "in-depth", "comprehensive", "in depth",
         ],
-        "web_skill.md":  ["search", "browse", "scrape", "url", "web", "http", "website", "crawl"],
-        "file_skill.md": ["save", "write", "read", "csv", "json", "file", "txt", "download", "upload"],
-        "code_skill.md": ["code", "script", "python", "flask", "backend", "deploy", "run", "execute", "pip"],
-        "ppt_skill.md":  ["ppt", "slides", "powerpoint", "presentation", "slide", "deck"],
+        "cricket_skill.md": ["cricket", "score", "match", "innings", "ipl", "cric"],
+        "web_skill.md":    ["search", "browse", "scrape", "url", "web", "http", "website", "crawl"],
+        "file_skill.md":   ["save", "write", "read", "csv", "json", "file", "txt", "download", "upload"],
+        "code_skill.md":   ["code", "script", "python", "flask", "backend", "deploy", "run", "execute", "pip"],
+        "ppt_skill.md":    ["ppt", "slides", "powerpoint", "presentation", "slide", "deck"],
+        "deploy_skill.md": ["deploy", "vercel", "github", "push", "repo", "host", "launch", "publish", "git"],
+        "social_media_skill.md": ["instagram", "linkedin", "post", "social media", "caption", "marketing", "story"],
+        "calendar_skill.md": ["calendar", "meeting", "schedule", "meet", "appointment", "invite", "nylas"],
     }
 
     already_loaded: set[str] = set()

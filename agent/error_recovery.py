@@ -12,7 +12,7 @@ from rich.console import Console
 console = Console()
 
 
-def run_with_recovery(run_fn, task: str, max_attempts: int = 3):
+def run_with_recovery(run_fn, task: str, image=None, max_attempts: int = 3):
     """
     Try to execute a task up to *max_attempts* times with smart recovery.
 
@@ -38,7 +38,10 @@ def run_with_recovery(run_fn, task: str, max_attempts: int = 3):
         )
 
         try:
-            result = run_fn(current_task)
+            if image:
+                result = run_fn(current_task, image)
+            else:
+                result = run_fn(current_task)
             console.print("[bold green]✅ Task completed successfully![/bold green]")
             return result, True
 
@@ -77,7 +80,7 @@ def run_with_recovery(run_fn, task: str, max_attempts: int = 3):
         if choice in ("yes", "y"):
             new_task = console.input("[bold cyan]Enter new task: [/bold cyan]").strip()
             if new_task:
-                return run_with_recovery(run_fn, new_task, max_attempts)
+                return run_with_recovery(run_fn, new_task, image, max_attempts)
             console.print("[yellow]Empty input — please try again.[/yellow]")
         elif choice in ("no", "n"):
             summary = (

@@ -76,16 +76,16 @@ def print_help():
 
 # ── Task Handler ─────────────────────────────────────────────────────
 
-def _run_agent_in_thread(task: str, result_box: list):
+def _run_agent_in_thread(task: str, image, result_box: list):
     """Run the agent in a background thread and store (result, success) in result_box."""
     try:
-        result, success = run_with_recovery(run_agent, task)
+        result, success = run_with_recovery(run_agent, task, image)
         result_box.append((result, success))
     except Exception as exc:
         result_box.append((str(exc), False))
 
 
-def handle_task(task: str):
+def handle_task(task: str, image=None):
     """
     Run the agent with a live Rich spinner so the user always sees feedback.
     A background thread cycles through status messages every 8 seconds.
@@ -109,7 +109,7 @@ def handle_task(task: str):
 
     # Run the agent in a background thread
     result_box: list = []
-    agent_thread = threading.Thread(target=_run_agent_in_thread, args=(task, result_box), daemon=True)
+    agent_thread = threading.Thread(target=_run_agent_in_thread, args=(task, image, result_box), daemon=True)
     agent_thread.start()
 
     # Show a live spinner while the thread is running
@@ -186,7 +186,20 @@ def main():
                 print_help()
 
             else:
-                handle_task(user_input)
+                image_path = console.input("[bold green]Attach an image path (press Enter to skip): [/bold green]").strip()
+                
+                loaded_image = None
+                if image_path:
+                    # Strip extra shell quotes from drop
+                    image_path = image_path.strip('\'"')
+                    try:
+                        from PIL import Image
+                        loaded_image = Image.open(image_path)
+                    except Exception as e:
+                        console.print(f"[bold red]Failed to load image: {e}[/bold red]")
+                        continue
+                        
+                handle_task(user_input, loaded_image)
 
         except KeyboardInterrupt:
             console.print("\n[bold red]Goodbye![/bold red]")
